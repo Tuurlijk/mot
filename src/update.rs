@@ -248,7 +248,7 @@ fn handle_export(model: &mut AppModel) {
         return;
     }
 
-    let filename = file::generate_export_filename(model);
+    let filename = file::generate_export_filename(model, None);
     model.log_debug("Starting export operation...");
 
     match file::export_time_entries_to_csv(model, &filename) {

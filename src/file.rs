@@ -39,7 +39,7 @@ pub async fn handle_export_command(
     crate::api::get_time_entries(model).await;
 
     // Generate the filename with week number and date range
-    let filename = generate_export_filename(model);
+    let filename = generate_export_filename(model, Some(target_week));
     println!("Exporting to file: {}", filename);
 
     // Apply filter if query is provided
@@ -141,7 +141,7 @@ pub fn export_time_entries_to_csv(
 }
 
 /// Generate a filename with week number and date range
-pub fn generate_export_filename(model: &AppModel) -> String {
+pub fn generate_export_filename(model: &AppModel, override_week_num: Option<i32>) -> String {
     // Get administration timezone, default to UTC if not set
     let admin_timezone_str = model
         .administration
@@ -149,12 +149,21 @@ pub fn generate_export_filename(model: &AppModel) -> String {
         .clone()
         .unwrap_or_else(|| "UTC".to_string());
 
-    // Get week number and year
-    let (week_num, year) = datetime::get_week_number(
-        model.week_offset,
-        &admin_timezone_str,
-        &model.config.week_starts_on,
-    );
+    // Get week number and year - use override if provided, otherwise calculate from offset
+    let (week_num, year) = if let Some(week) = override_week_num {
+        let (_, year) = datetime::get_week_number(
+            model.week_offset,
+            &admin_timezone_str,
+            &model.config.week_starts_on,
+        );
+        (week, year)
+    } else {
+        datetime::get_week_number(
+            model.week_offset,
+            &admin_timezone_str,
+            &model.config.week_starts_on,
+        )
+    };
 
     // Get the week date range for the filename
     let (start, end) = datetime::calculate_week_range(
