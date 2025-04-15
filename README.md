@@ -4,7 +4,7 @@
 
 A beautiful terminal-based interface for managing your MoneyBird time entries with style.
 
-![MOT Screenshot](mot.png)
+![MOT Screenshot][mot.png]
 
 ## ✨ Features
 
