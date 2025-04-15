@@ -198,3 +198,276 @@ pub fn set_color_preferences(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_to_rgb() {
+        // Test with common colors
+        assert_eq!(
+            hex_to_rgb(0xFF0000),
+            (255, 0, 0),
+            "Red color conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0x00FF00),
+            (0, 255, 0),
+            "Green color conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0x0000FF),
+            (0, 0, 255),
+            "Blue color conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0xFFFFFF),
+            (255, 255, 255),
+            "White color conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0x000000),
+            (0, 0, 0),
+            "Black color conversion failed"
+        );
+
+        // Test with mixed colors
+        assert_eq!(
+            hex_to_rgb(0xC0C0C0),
+            (192, 192, 192),
+            "Light gray conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0x333333),
+            (51, 51, 51),
+            "Dark gray conversion failed"
+        );
+        assert_eq!(
+            hex_to_rgb(0x800080),
+            (128, 0, 128),
+            "Purple conversion failed"
+        );
+    }
+
+    #[test]
+    fn test_rgb_to_indexed() {
+        // Test color cube corners (should map to corners of the 6x6x6 color cube)
+        assert_eq!(
+            rgb_to_indexed((0, 0, 0)),
+            16,
+            "Black indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((255, 0, 0)),
+            196,
+            "Red indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((0, 255, 0)),
+            46,
+            "Green indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((0, 0, 255)),
+            21,
+            "Blue indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((255, 255, 0)),
+            226,
+            "Yellow indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((255, 0, 255)),
+            201,
+            "Magenta indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((0, 255, 255)),
+            51,
+            "Cyan indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((255, 255, 255)),
+            231,
+            "White indexed color incorrect"
+        );
+
+        // Test some intermediate colors
+        assert_eq!(
+            rgb_to_indexed((128, 128, 128)),
+            145,
+            "Gray indexed color incorrect"
+        );
+        assert_eq!(
+            rgb_to_indexed((192, 192, 192)),
+            188,
+            "Light gray indexed color incorrect"
+        );
+    }
+
+    #[test]
+    fn test_calculate_dimmed_color() {
+        // Test in dark mode
+        let dimmed_dark = calculate_dimmed_color((200, 200, 200), Mode::Dark);
+        assert_eq!(dimmed_dark, (100, 100, 100), "Dark mode dimming incorrect");
+
+        // Test in light mode
+        let dimmed_light = calculate_dimmed_color((100, 100, 100), Mode::Light);
+        assert_eq!(
+            dimmed_light,
+            (200, 200, 200),
+            "Light mode dimming incorrect"
+        );
+
+        // Test with color saturation in light mode (shouldn't exceed 255)
+        let dimmed_light_saturated = calculate_dimmed_color((200, 200, 200), Mode::Light);
+        assert_eq!(
+            dimmed_light_saturated,
+            (255, 255, 255),
+            "Light mode saturation handling incorrect"
+        );
+
+        // Test with dark mode black color (shouldn't go below 0)
+        let dimmed_dark_black = calculate_dimmed_color((0, 0, 0), Mode::Dark);
+        assert_eq!(
+            dimmed_dark_black,
+            (0, 0, 0),
+            "Dark mode black handling incorrect"
+        );
+    }
+
+    #[test]
+    fn test_interpolate_color() {
+        // Test with no progress (should be the foreground color)
+        let no_progress = interpolate_color((100, 100, 100), (50, 50, 50), 0.0, Mode::Dark);
+        assert_eq!(
+            no_progress,
+            (100, 100, 100),
+            "No progress interpolation incorrect"
+        );
+
+        // Test with full progress (should be the dimmed color)
+        let full_progress = interpolate_color((100, 100, 100), (50, 50, 50), 1.0, Mode::Dark);
+        assert_eq!(
+            full_progress,
+            (50, 50, 50),
+            "Full progress interpolation incorrect"
+        );
+
+        // Test with half progress
+        let half_progress = interpolate_color((100, 100, 100), (50, 50, 50), 0.5, Mode::Dark);
+        assert_eq!(
+            half_progress,
+            (75, 75, 75),
+            "Half progress interpolation incorrect"
+        );
+
+        // Test light mode interpolation
+        let light_half_progress =
+            interpolate_color((100, 100, 100), (200, 200, 200), 0.5, Mode::Light);
+        assert_eq!(
+            light_half_progress,
+            (150, 150, 150),
+            "Light mode half progress interpolation incorrect"
+        );
+    }
+
+    #[test]
+    fn test_interpolate_component() {
+        // Test interpolation in dark mode
+        assert_eq!(
+            interpolate_component(100, 50, 0.0, Mode::Dark),
+            100,
+            "Dark mode 0.0 progress incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 50, 0.5, Mode::Dark),
+            75,
+            "Dark mode 0.5 progress incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 50, 1.0, Mode::Dark),
+            50,
+            "Dark mode 1.0 progress incorrect"
+        );
+
+        // Test interpolation in light mode
+        assert_eq!(
+            interpolate_component(100, 200, 0.0, Mode::Light),
+            100,
+            "Light mode 0.0 progress incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 200, 0.5, Mode::Light),
+            150,
+            "Light mode 0.5 progress incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 200, 1.0, Mode::Light),
+            200,
+            "Light mode 1.0 progress incorrect"
+        );
+
+        // Test clamping in dark mode (should not go below dimmed)
+        assert_eq!(
+            interpolate_component(100, 50, -0.5, Mode::Dark),
+            100,
+            "Dark mode negative progress clamping incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 50, 1.5, Mode::Dark),
+            50,
+            "Dark mode excessive progress clamping incorrect"
+        );
+
+        // Test clamping in light mode (should not go below foreground)
+        assert_eq!(
+            interpolate_component(100, 200, -0.5, Mode::Light),
+            100,
+            "Light mode negative progress clamping incorrect"
+        );
+        assert_eq!(
+            interpolate_component(100, 200, 1.5, Mode::Light),
+            200,
+            "Light mode excessive progress clamping incorrect"
+        );
+    }
+
+    #[test]
+    fn test_gradient_color_selection() {
+        // Test selected row (should be reversed style regardless of distance)
+        let selected_style = gradient_color(5, true, None, (255, 255, 255), Mode::Dark);
+        assert!(
+            selected_style.add_modifier.contains(Modifier::REVERSED),
+            "Selected row should have REVERSED style"
+        );
+        assert!(
+            selected_style.add_modifier.contains(Modifier::ITALIC),
+            "Selected row should have ITALIC style"
+        );
+    }
+
+    #[test]
+    fn test_gradient_color_immediate_neighbor() {
+        // Test immediate neighbor (distance = 0, should be default style)
+        let neighbor_style = gradient_color(0, false, None, (255, 255, 255), Mode::Dark);
+        assert_eq!(
+            neighbor_style,
+            Style::default(),
+            "Immediate neighbor should have default style"
+        );
+    }
+
+    #[test]
+    fn test_gradient_color_no_color_support() {
+        // Test no color support (should return default style)
+        let no_color_style = gradient_color(5, false, None, (255, 255, 255), Mode::Dark);
+        assert_eq!(
+            no_color_style,
+            Style::default(),
+            "No color support should return default style"
+        );
+    }
+}

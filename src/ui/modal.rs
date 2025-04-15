@@ -169,9 +169,10 @@ pub fn render_modal(model: &crate::AppModel, frame: &mut Frame) {
         };
 
         // Prepare the bottom instructions text
-        let dismiss_shortcut = Shortcuts::new(vec![
-            Shortcut::Pair("Enter", "Press Enter or any key to dismiss"),
-        ])
+        let dismiss_shortcut = Shortcuts::new(vec![Shortcut::Pair(
+            "Enter",
+            "Press Enter or any key to dismiss",
+        )])
         .with_key_style(
             model
                 .appearance

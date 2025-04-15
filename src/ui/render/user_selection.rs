@@ -1,4 +1,7 @@
-use crate::{model::AppModel, ui::{Shortcut, Shortcuts}};
+use crate::{
+    model::AppModel,
+    ui::{Shortcut, Shortcuts},
+};
 use ratatui::{
     layout::{Alignment, Constraint, Rect},
     prelude::*,

@@ -398,7 +398,7 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
             x: mouse.column,
             y: mouse.row,
         };
-        
+
         // Check if click is on any of the stored field areas
         for (&field, &area) in &model.edit_state.field_areas {
             if area.contains(mouse_pos) {
@@ -406,7 +406,7 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
                 return Some(Message::EditTimeEntryFieldClick(field));
             }
         }
-        
+
         // Click was in edit mode but not on any field
         return None;
     }

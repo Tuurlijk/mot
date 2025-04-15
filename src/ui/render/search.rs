@@ -11,7 +11,7 @@ pub fn render_search(model: &mut AppModel, area: Rect, frame: &mut Frame) {
         top_right: symbols::line::NORMAL.vertical_left,
         ..symbols::border::PLAIN
     };
-    
+
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Pair("🔍", "filter"),
         Shortcut::Pair("Esc", "exit"),

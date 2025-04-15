@@ -785,9 +785,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     model.edit_state.selected_field = FIELD_ORDER[next_index];
 
                     // Update editor content for the new field
-                    initialize_editor_or_autocomplete(
-                        &mut model.edit_state,
-                    );
+                    initialize_editor_or_autocomplete(&mut model.edit_state);
                 }
             }
             None
@@ -823,9 +821,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     model.edit_state.selected_field = FIELD_ORDER[prev_index];
 
                     // Update editor content for the new field
-                    initialize_editor_or_autocomplete(
-                        &mut model.edit_state,
-                    );
+                    initialize_editor_or_autocomplete(&mut model.edit_state);
                 }
             }
             None
@@ -1090,9 +1086,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             model.edit_state.end_time = end_time_default.format("%H:%M").to_string();
 
             // Initialize autocomplete states (already done by EditState::default)
-            initialize_editor_or_autocomplete(
-                &mut model.edit_state,
-            );
+            initialize_editor_or_autocomplete(&mut model.edit_state);
 
             None
         }
@@ -1188,18 +1182,18 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
-        
+
         Message::EditTimeEntryFieldClick(field) => {
             if model.edit_state.active {
                 // Save current field data before changing fields
                 update_edit_field_from_editor(&mut model.edit_state);
-                
+
                 // Set the new field
                 model.edit_state.selected_field = field;
-                
+
                 // Initialize editor for the new field
                 initialize_editor_or_autocomplete(&mut model.edit_state);
-                
+
                 model.log_debug(format!("Clicked on field: {:?}", field));
             }
             None

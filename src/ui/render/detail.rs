@@ -122,9 +122,8 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         crate::datetime::format_time_range_from_time_entry(
             selected_item.clone(),
             &admin_timezone_str,
-            ),
         ),
-    );
+    ));
 
     let mut title_spans = vec![Span::from(" ")];
     title_spans.extend(client_project.clone());

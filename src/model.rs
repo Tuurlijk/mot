@@ -1,9 +1,9 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use ratatui::{
+    layout::Rect,
     style::{Color, Style},
     widgets::TableState,
-    layout::Rect,
 };
 use supports_color::ColorLevel;
 use tui_textarea::TextArea;
@@ -221,7 +221,7 @@ pub(crate) struct EditState {
 
     // Autocomplete state for contact selection
     pub(crate) contact_autocomplete: AutocompleteState<Contact>,
-    
+
     // Areas of each field for click detection
     pub(crate) field_areas: std::collections::HashMap<EditField, Rect>,
 }

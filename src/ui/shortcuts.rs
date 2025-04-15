@@ -83,12 +83,13 @@ impl Shortcuts {
                         let first_char = key1.chars().next().unwrap_or('?'); // Use key1
 
                         if let Some(idx) = label.find(first_char) {
-                             // Ensure the key is not empty before slicing
+                            // Ensure the key is not empty before slicing
                             let key_len = key1.chars().count();
                             if key_len > 0 && idx + key_len <= label.chars().count() {
                                 // Split the label around the key
                                 let before = label.chars().take(idx).collect::<String>();
-                                let highlight = label.chars().skip(idx).take(key_len).collect::<String>();
+                                let highlight =
+                                    label.chars().skip(idx).take(key_len).collect::<String>();
                                 let after = label.chars().skip(idx + key_len).collect::<String>();
 
                                 spans.push(Span::styled(before, self.shortcut_label_style));
