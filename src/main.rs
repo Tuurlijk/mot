@@ -30,6 +30,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut model = AppModel {
         ..Default::default()
     };
+    model.config = config::get_configuration();
 
     // Check connectivity to the MoneyBird API but don't exit on failure
     model.log_notice("Checking MoneyBird API connectivity...");
