@@ -342,7 +342,6 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
     // --- End Refactored Edit State ---
     } else {
         // --- Handling for Non-Edit State ---
-        // (Search state handling remains the same)
         if model.search_state.active {
             match key.code {
                 KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
@@ -354,24 +353,22 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 KeyCode::Down => Some(Message::SelectNext),
                 KeyCode::Left => Some(Message::PreviousWeek),
                 KeyCode::Right => Some(Message::NextWeek),
-                KeyCode::Enter => None, // Enter does nothing in search mode (could select?)
                 KeyCode::Esc => Some(Message::SearchHide),
                 _ => Some(Message::SearchKeyPress(key)),
             }
         } else {
-            // (Normal list view handling remains the same)
             match key.code {
                 KeyCode::Char('x') => Some(Message::Export),
                 KeyCode::F(4) => Some(Message::EditTimeEntry),
                 KeyCode::Char('h') | KeyCode::Left => Some(Message::PreviousWeek),
                 KeyCode::Char('j') | KeyCode::Down => Some(Message::SelectNext),
                 KeyCode::Char('k') | KeyCode::Up => Some(Message::SelectPrevious),
-                KeyCode::Char('l') | KeyCode::Right => Some(Message::NextWeek), // Use NextWeek for consistency
+                KeyCode::Char('l') | KeyCode::Right => Some(Message::NextWeek),
                 KeyCode::Char('q') => Some(Message::Quit),
                 KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
                     Some(Message::EditTimeEntry)
-                } // Added Enter here
-                KeyCode::Char('c') => Some(Message::CreateTimeEntry), // <-- Add keybinding for Create
+                }
+                KeyCode::Char('c') => Some(Message::CreateTimeEntry),
                 KeyCode::Char('t') => Some(Message::CurrentWeek),
                 KeyCode::Char('r') => Some(Message::Refresh),
                 KeyCode::Char('f') | KeyCode::Char('/') => Some(Message::SearchShow),

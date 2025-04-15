@@ -56,12 +56,12 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 
 ### General Navigation & Actions
 
--   `◀` / `h` / `←`: Previous week
--   `▶` / `l` / `→`: Next week
+-   `◀` / `h`: Previous week
+-   `▶` / `l`: Next week
 -   `t`: Go to current week
 -   `r`: Refresh time entries
--   `▲` / `k` / `↑`: Move selection up
--   `▼` / `j` / `↓`: Move selection down
+-   `▲` / `k`: Move selection up
+-   `▼` / `j`: Move selection down
 -   `q`: Quit the application
 -   `F12`: Toggle log panel visibility
 
@@ -69,7 +69,7 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 
 -   `c`: Create a new time entry
 -   `e` / `Enter` / `Space`: Edit selected time entry
--   `Delete`: Delete selected time entry (with confirmation)
+-   `d` / `Delete`: Delete selected time entry (with confirmation)
 -   `x`: Export current view to CSV (with confirmation)
 
 ### Search Mode (Filter)
@@ -142,4 +142,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Dennis Ameling](https://github.com/dennisameling/moneybird-openapi) for the original MoneyBird OpenAPI specification, which was trimmed using [apisnip](https://crates.io/crates/apisnip) for this project.
 - All contributors who have helped shape this project
 
-[apisnip.gif]: https://github.com/Tuurlijk/mot/blob/images/images/mot.png?raw=true
+[mot.png]: https://github.com/Tuurlijk/mot/blob/images/images/mot.png?raw=true
