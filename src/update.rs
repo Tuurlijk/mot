@@ -165,6 +165,11 @@ fn handle_autocomplete_clear<T: Clone>(
 // Helper function to handle selecting a project from autocomplete
 fn handle_autocomplete_select_project(model: &mut AppModel) {
     if let Some(selected_project) = model.edit_state.project_autocomplete.selected_item() {
+        // Add selected project to the project list on model.projects if it's not already there
+        if !model.projects.iter().any(|p| p.id == selected_project.id) {
+            model.projects.push(selected_project.clone());
+        }
+
         let project_id = selected_project.id.clone();
         let project_name = selected_project.name.clone().unwrap_or_default();
         model.edit_state.project_id = project_id;
@@ -180,6 +185,11 @@ fn handle_autocomplete_select_project(model: &mut AppModel) {
 // Helper function to handle selecting a contact from autocomplete
 fn handle_autocomplete_select_contact(model: &mut AppModel) {
     if let Some(selected_contact) = model.edit_state.contact_autocomplete.selected_item() {
+        // Add selected contact to the contact list on model.contacts if it's not already there
+        if !model.contacts.iter().any(|c| c.id == selected_contact.id) {
+            model.contacts.push(selected_contact.clone());
+        }
+
         let contact_id = selected_contact.id.clone();
         let contact_name = selected_contact.company_name.clone().unwrap_or_default();
         model.edit_state.contact_id = contact_id;
@@ -580,7 +590,19 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
 
                         // Set project and contact IDs
                         model.edit_state.project_id = original_entry.project_id.clone();
+                        model.edit_state.project_name = original_entry
+                            .project
+                            .clone()
+                            .unwrap_or_default()
+                            .name
+                            .clone();
                         model.edit_state.contact_id = original_entry.contact_id.clone();
+                        model.edit_state.contact_name = original_entry
+                            .contact
+                            .clone()
+                            .unwrap_or_default()
+                            .company_name
+                            .clone();
 
                         // Initialize the shared editor with the description
                         let mut editor = TextArea::default();

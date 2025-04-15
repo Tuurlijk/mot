@@ -126,12 +126,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         );
     } else {
         // Use inactive block and potentially display the selected name when not active
-        let contact_name = model
-            .contacts
-            .iter()
-            .find(|c| c.id.as_ref() == model.edit_state.contact_id.as_ref())
-            .map(|c| c.company_name.clone().unwrap_or_default())
-            .unwrap_or_else(|| "".to_string()); // Show empty if nothing selected/not active
+        let contact_name = model.edit_state.contact_name.clone().unwrap_or_default();
 
         // Display static text within an inactive block
         let contact_display = if model.edit_state.contact_id.is_some() {
@@ -176,12 +171,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         );
     } else {
         // Use inactive block and display the selected name when not active
-        let project_name = model
-            .projects
-            .iter()
-            .find(|p| p.id.as_ref() == model.edit_state.project_id.as_ref())
-            .map(|p| p.name.clone().unwrap_or_default())
-            .unwrap_or_else(|| "".to_string()); // Show empty if nothing selected/not active
+        let project_name = model.edit_state.project_name.clone().unwrap_or_default();
 
         // Display static text within an inactive block
         let project_display = if model.edit_state.project_id.is_some() {

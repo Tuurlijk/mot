@@ -207,7 +207,9 @@ pub(crate) struct EditState {
     pub(crate) entry_id: String,    // ID of the time entry being edited
     pub(crate) description: String, // Description text
     pub(crate) project_id: Option<String>, // Selected project ID
+    pub(crate) project_name: Option<String>, // Selected project name
     pub(crate) contact_id: Option<String>, // Selected contact ID
+    pub(crate) contact_name: Option<String>, // Selected contact name
     pub(crate) start_date: String,  // Start date value
     pub(crate) start_time: String,  // Start time value
     pub(crate) end_date: String,    // End date value
