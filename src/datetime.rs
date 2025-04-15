@@ -491,7 +491,7 @@ mod tests {
         // We can't assert the exact week number since it depends on the current date
         // but we can verify that it's within a reasonable range
         assert!(
-            week >= 1 && week <= 53,
+            (1..=53).contains(&week),
             "Week number should be between 1-53"
         );
 

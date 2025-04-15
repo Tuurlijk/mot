@@ -415,7 +415,7 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
     match mouse.kind {
         MouseEventKind::ScrollDown => Some(Message::TimeEntrySelectPrevious),
         MouseEventKind::ScrollUp => Some(Message::TimeEntrySelectNext),
-        MouseEventKind::Down(button) if button == event::MouseButton::Left => {
+        MouseEventKind::Down(event::MouseButton::Left) => {
             if let Some(table_area) = model.table_area {
                 // Check if the click is within the table's bounds
                 if table_area.contains(ratatui::layout::Position {
