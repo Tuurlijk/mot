@@ -1,0 +1,45 @@
+[package]
+name = "mot"
+description = "A terminal user interface (TUI) tool for moneybird"
+version = "0.1.0"
+edition = "2021"
+authors = ["Michiel Roos <mot.free.bra@michielroos.com>"]
+license = "MIT"
+repository = "https://github.com/Tuurlijk/mot"
+keywords = ["tui", "moneybird", "timesheet", "terminal", "cli"]
+categories = ["command-line-utilities", "visualization"]
+readme = "README.md"
+
+[dependencies]
+
+# CLI and TUI
+clap = { version = "4.5.32", features = ["derive"] }
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+ratatui = "0.29.0"
+tui-textarea = { git = "https://github.com/Tuurlijk/tui-textarea.git" } # tui-textare with naive line wrapping enabled
+color-eyre = "0.6.3"
+anstyle = "1.0.7"
+progenitor-client = { git = "https://github.com/oxidecomputer/progenitor" }
+
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.140"
+dirs = "6.0.0"
+config = "0.15.11"
+chrono = { version = "0.4.40", features = ["serde"] }
+chrono-tz = "0.10.3"
+toml = "0.8.8"
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
+tokio-stream = "0.1.17"
+
+# Utils
+atty = "0.2.14"
+supports-color = "3.0.0"
+terminal-light = "1.7.0"
+
+[build-dependencies]
+prettyplease = "0.2.22"
+progenitor = { git = "https://github.com/oxidecomputer/progenitor" }
+serde_yaml_ng = "0.10.0"
+syn = "2.0"
+regex = "1.10.3"
