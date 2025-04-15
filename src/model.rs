@@ -3,7 +3,6 @@ use chrono_tz::Tz;
 use ratatui::{
     style::{Color, Style},
     widgets::TableState,
-    crossterm::event::{KeyCode, KeyEvent},
     layout::Rect,
 };
 use supports_color::ColorLevel;
