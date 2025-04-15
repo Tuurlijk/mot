@@ -114,7 +114,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
             .padding(Padding::new(1, 0, 0, 0)),
     )
     .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
-    .selected_style(Style::default().bg(Color::Blue).fg(Color::White))
+    .selected_style(Style::default().bg(Color::Green).fg(Color::White))
     .dropdown_style(Style::default())
     .placeholder("Type to search contacts...");
 
@@ -166,7 +166,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
             .padding(Padding::new(1, 0, 0, 0)),
     )
     .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
-    .selected_style(Style::default().bg(Color::Blue).fg(Color::White))
+    .selected_style(Style::default().bg(Color::Green).fg(Color::White))
     .dropdown_style(Style::default())
     .placeholder("Type to search projects...");
 

@@ -7,7 +7,7 @@ use crate::{
     config, datetime,
     event::Message,
     file,
-    model::{AppModel, AutocompleteState, Contact, EditState, Project, TimeEntryForTable},
+    model::{AppModel, AutocompleteState, EditState, TimeEntryForTable},
     ui::{self},
     RunningState,
 };
@@ -46,11 +46,7 @@ fn update_edit_field_from_editor(edit_state: &mut EditState) {
 }
 
 // Helper function to initialize the shared editor or autocomplete state for the selected field
-fn initialize_editor_or_autocomplete(
-    edit_state: &mut EditState,
-    projects: &[Project],
-    contacts: &[Contact],
-) {
+fn initialize_editor_or_autocomplete(edit_state: &mut EditState) {
     edit_state.editor = TextArea::default(); // Clear editor for text fields
     match edit_state.selected_field {
         crate::model::EditField::Description => {
@@ -69,56 +65,18 @@ fn initialize_editor_or_autocomplete(
             edit_state.editor.insert_str(&edit_state.end_time);
         }
         crate::model::EditField::Project => {
-            // Reset autocomplete state, preserving input if possible
+            // Reset autocomplete state and clear input for new search
             edit_state.project_autocomplete.items.clear();
             edit_state.project_autocomplete.is_dropdown_visible = false;
             edit_state.project_autocomplete.list_state.select(None);
-            if let Some(project_id) = &edit_state.project_id {
-                if let Some(project) = projects
-                    .iter()
-                    .find(|p| p.id.as_ref().map(|id| id == project_id).unwrap_or(false))
-                {
-                    if let Some(name) = &project.name {
-                        // Don't clear input if we found the current project
-                        if edit_state.project_autocomplete.input != *name {
-                            edit_state.project_autocomplete.input = name.clone();
-                        }
-                        edit_state.project_autocomplete.mark_searched(); // Avoid immediate trigger
-                    } else {
-                        edit_state.project_autocomplete.clear_input(); // Clear if name missing
-                    }
-                } else {
-                    edit_state.project_autocomplete.clear_input(); // Clear if project not found
-                }
-            } else {
-                edit_state.project_autocomplete.clear_input(); // Clear if no project ID
-            }
+            edit_state.project_autocomplete.clear_input();
         }
         crate::model::EditField::Contact => {
-            // Reset autocomplete state, preserving input if possible
+            // Reset autocomplete state and clear input for new search
             edit_state.contact_autocomplete.items.clear();
             edit_state.contact_autocomplete.is_dropdown_visible = false;
             edit_state.contact_autocomplete.list_state.select(None);
-            if let Some(contact_id) = &edit_state.contact_id {
-                if let Some(contact) = contacts
-                    .iter()
-                    .find(|c| c.id.as_ref().map(|id| id == contact_id).unwrap_or(false))
-                {
-                    if let Some(name) = &contact.company_name {
-                        // Don't clear input if we found the current contact
-                        if edit_state.contact_autocomplete.input != *name {
-                            edit_state.contact_autocomplete.input = name.clone();
-                        }
-                        edit_state.contact_autocomplete.mark_searched(); // Avoid immediate trigger
-                    } else {
-                        edit_state.contact_autocomplete.clear_input(); // Clear if name missing
-                    }
-                } else {
-                    edit_state.contact_autocomplete.clear_input(); // Clear if contact not found
-                }
-            } else {
-                edit_state.contact_autocomplete.clear_input(); // Clear if no contact ID
-            }
+            edit_state.contact_autocomplete.clear_input();
         }
     }
 }
@@ -829,8 +787,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     // Update editor content for the new field
                     initialize_editor_or_autocomplete(
                         &mut model.edit_state,
-                        &model.projects,
-                        &model.contacts,
                     );
                 }
             }
@@ -869,8 +825,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     // Update editor content for the new field
                     initialize_editor_or_autocomplete(
                         &mut model.edit_state,
-                        &model.projects,
-                        &model.contacts,
                     );
                 }
             }
@@ -1138,8 +1092,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             // Initialize autocomplete states (already done by EditState::default)
             initialize_editor_or_autocomplete(
                 &mut model.edit_state,
-                &model.projects,
-                &model.contacts,
             );
 
             None
