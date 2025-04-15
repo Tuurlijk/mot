@@ -121,6 +121,7 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 - [ ] CRUD operations for contacts
 - [ ] Project browser
 - [ ] CRUD operations for projects
+- [ ] Add ci workflows
 
 ## 🤝 Contributing
 
