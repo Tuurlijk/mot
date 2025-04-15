@@ -16,10 +16,10 @@ readme = "README.md"
 clap = { version = "4.5.32", features = ["derive"] }
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 ratatui = "0.29.0"
-tui-textarea = { git = "https://github.com/Tuurlijk/tui-textarea.git" } # tui-textare with naive line wrapping enabled
+tui-textarea = "0.7.0"
 color-eyre = "0.6.3"
 anstyle = "1.0.7"
-progenitor-client = { git = "https://github.com/oxidecomputer/progenitor" }
+progenitor-client = "0.9.1"
 
 reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -39,7 +39,10 @@ terminal-light = "1.7.0"
 
 [build-dependencies]
 prettyplease = "0.2.22"
-progenitor = { git = "https://github.com/oxidecomputer/progenitor" }
+progenitor = "0.9.1"
 serde_yaml_ng = "0.10.0"
 syn = "2.0"
 regex = "1.10.3"
+
+[patch.crates-io]
+tui-textarea = { git = "https://github.com/Tuurlijk/tui-textarea.git" } # tui-textare with naive line wrapping enabled

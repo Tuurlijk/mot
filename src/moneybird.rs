@@ -2,12 +2,14 @@
 pub use progenitor_client::{ByteStream, Error, ResponseValue};
 #[allow(unused_imports)]
 use progenitor_client::{encode_path, RequestBuilderExt};
+#[allow(unused_imports)]
+use reqwest::header::{HeaderMap, HeaderValue};
 /// Types used as operation parameters and responses.
 #[allow(clippy::all)]
 pub mod types {
     /// Error types.
     pub mod error {
-        /// Error from a `TryFrom` or `FromStr` implementation.
+        /// Error from a TryFrom or FromStr implementation.
         pub struct ConversionError(::std::borrow::Cow<'static, str>);
         impl ::std::error::Error for ConversionError {}
         impl ::std::fmt::Display for ConversionError {
@@ -595,7 +597,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ContactCreateContactPersonItem`
+    ///ContactCreateContactPersonItem
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -639,7 +641,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ContactCreateCustomFieldsAttributesItem`
+    ///ContactCreateCustomFieldsAttributesItem
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -994,7 +996,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ContactReadContactPeopleItem`
+    ///ContactReadContactPeopleItem
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1257,7 +1259,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ContactUpdateCustomFieldsAttributesItem`
+    ///ContactUpdateCustomFieldsAttributesItem
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1301,7 +1303,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`CustomField`
+    ///CustomField
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1356,7 +1358,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`Event`
+    ///Event
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1441,7 +1443,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`GetProjectsFilter`
+    ///GetProjectsFilter
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1527,7 +1529,7 @@ pub mod types {
             value.parse()
         }
     }
-    ///`Note`
+    ///Note
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1755,7 +1757,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ProjectCreateProject`
+    ///ProjectCreateProject
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -1792,7 +1794,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`ProjectRead`
+    ///ProjectRead
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -2145,7 +2147,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`TimeEntryCreateTimeEntry`
+    ///TimeEntryCreateTimeEntry
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -2328,7 +2330,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`TimeEntryUpdateTimeEntry`
+    ///TimeEntryUpdateTimeEntry
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -2582,7 +2584,7 @@ pub mod types {
             Default::default()
         }
     }
-    ///`UserPermissionsItem`
+    ///UserPermissionsItem
     ///
     /// <details><summary>JSON schema</summary>
     ///
@@ -8643,7 +8645,10 @@ let response = client.get_users()
 pub mod builder {
     use super::types;
     #[allow(unused_imports)]
-    use super::{encode_path, ByteStream, Error, RequestBuilderExt, ResponseValue};
+    use super::{
+        encode_path, ByteStream, Error, HeaderMap, HeaderValue, RequestBuilderExt,
+        ResponseValue,
+    };
     /**Builder for [`Client::get_administrations`]
 
 [`Client::get_administrations`]: super::Client::get_administrations*/
@@ -8666,8 +8671,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .build()?;
             let result = client.client.execute(request).await;
@@ -8686,7 +8691,7 @@ pub mod builder {
         client: &'a super::Client,
         administration_id: Result<::std::string::String, String>,
         include_archived: Result<Option<bool>, String>,
-        page: Result<Option<::std::num::NonZeroU64>, String>,
+        page: Result<Option<std::num::NonZeroU64>, String>,
         per_page: Result<Option<i64>, String>,
         query: Result<Option<::std::string::String>, String>,
     }
@@ -8729,13 +8734,13 @@ pub mod builder {
         }
         pub fn page<V>(mut self, value: V) -> Self
         where
-            V: std::convert::TryInto<::std::num::NonZeroU64>,
+            V: std::convert::TryInto<std::num::NonZeroU64>,
         {
             self.page = value
                 .try_into()
                 .map(Some)
                 .map_err(|_| {
-                    "conversion to `:: std :: num :: NonZeroU64` for page failed"
+                    "conversion to `std :: num :: NonZeroU64` for page failed"
                         .to_string()
                 });
             self
@@ -8789,8 +8794,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .query(
                     &progenitor_client::QueryParam::new(
@@ -8881,8 +8886,8 @@ pub mod builder {
                 .client
                 .post(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -8951,8 +8956,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .build()?;
             let result = client.client.execute(request).await;
@@ -9112,8 +9117,8 @@ pub mod builder {
                 .client
                 .patch(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -9133,7 +9138,7 @@ pub mod builder {
         client: &'a super::Client,
         administration_id: Result<::std::string::String, String>,
         filter: Result<Option<types::GetProjectsFilter>, String>,
-        page: Result<Option<::std::num::NonZeroU64>, String>,
+        page: Result<Option<std::num::NonZeroU64>, String>,
         per_page: Result<Option<i64>, String>,
     }
     impl<'a> GetProjects<'a> {
@@ -9174,13 +9179,13 @@ pub mod builder {
         }
         pub fn page<V>(mut self, value: V) -> Self
         where
-            V: std::convert::TryInto<::std::num::NonZeroU64>,
+            V: std::convert::TryInto<std::num::NonZeroU64>,
         {
             self.page = value
                 .try_into()
                 .map(Some)
                 .map_err(|_| {
-                    "conversion to `:: std :: num :: NonZeroU64` for page failed"
+                    "conversion to `std :: num :: NonZeroU64` for page failed"
                         .to_string()
                 });
             self
@@ -9213,8 +9218,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .query(&progenitor_client::QueryParam::new("filter", &filter))
                 .query(&progenitor_client::QueryParam::new("page", &page))
@@ -9299,8 +9304,8 @@ pub mod builder {
                 .client
                 .post(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -9369,8 +9374,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .build()?;
             let result = client.client.execute(request).await;
@@ -9515,8 +9520,8 @@ pub mod builder {
                 .client
                 .patch(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -9536,7 +9541,7 @@ pub mod builder {
         client: &'a super::Client,
         administration_id: Result<::std::string::String, String>,
         filter: Result<Option<::std::string::String>, String>,
-        page: Result<Option<::std::num::NonZeroU64>, String>,
+        page: Result<Option<std::num::NonZeroU64>, String>,
         per_page: Result<Option<i64>, String>,
         query: Result<Option<::std::string::String>, String>,
     }
@@ -9580,13 +9585,13 @@ pub mod builder {
         }
         pub fn page<V>(mut self, value: V) -> Self
         where
-            V: std::convert::TryInto<::std::num::NonZeroU64>,
+            V: std::convert::TryInto<std::num::NonZeroU64>,
         {
             self.page = value
                 .try_into()
                 .map(Some)
                 .map_err(|_| {
-                    "conversion to `:: std :: num :: NonZeroU64` for page failed"
+                    "conversion to `std :: num :: NonZeroU64` for page failed"
                         .to_string()
                 });
             self
@@ -9633,8 +9638,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .query(&progenitor_client::QueryParam::new("filter", &filter))
                 .query(&progenitor_client::QueryParam::new("page", &page))
@@ -9724,8 +9729,8 @@ pub mod builder {
                 .client
                 .post(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -9796,8 +9801,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .build()?;
             let result = client.client.execute(request).await;
@@ -9961,8 +9966,8 @@ pub mod builder {
                 .client
                 .patch(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .json(&body)
                 .build()?;
@@ -10034,8 +10039,8 @@ pub mod builder {
                 .client
                 .get(url)
                 .header(
-                    ::reqwest::header::ACCEPT,
-                    ::reqwest::header::HeaderValue::from_static("application/json"),
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("application/json"),
                 )
                 .query(
                     &progenitor_client::QueryParam::new(
