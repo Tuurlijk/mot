@@ -391,9 +391,6 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
         Ok(entries) => {
             model.time_entries = entries.clone();
 
-            // Fetch missing contacts and projects
-            fetch_missing_contacts_and_projects(model, &admin_id).await;
-
             // Now populate the time_entries_for_table
             model.time_entries_for_table = entries
                 .iter()
@@ -453,100 +450,6 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
             model.time_entries_for_table = Vec::new();
             model.time_entries_for_table_backup = Vec::new();
             model.time_entry_table_state.select(None);
-        }
-    }
-}
-
-/// Helper function to fetch any missing contacts and projects for time entries
-pub(crate) async fn fetch_missing_contacts_and_projects(model: &mut AppModel, admin_id: &str) {
-    // Track errors to display them after all fetching is done
-    let mut errors = Vec::new();
-
-    // The get_all_contacts call only returns the first 100 contacts, so we need to fetch the contacts we need for the time entries if they are not in the first 100
-    // The get_all_projects call only returns the first 100 projects, so we need to fetch the projects we need for the time entries if they are not in the first 100
-    for time_entry in &model.time_entries.clone() {
-        if let Some(contact_id) = &time_entry.contact_id {
-            if !model
-                .contacts
-                .iter()
-                .any(|c| c.id.clone().unwrap_or_default() == *contact_id)
-            {
-                match crate::api::get_contact_by_id(
-                    &model.client,
-                    admin_id,
-                    &contact_id.to_string(),
-                )
-                .await
-                {
-                    Ok(contact) => {
-                        model.log_success(format!(
-                            "Fetched contact with ID: {}; name: {}",
-                            contact_id,
-                            contact.company_name.clone().unwrap_or_default()
-                        ));
-                        model.contacts.push(contact);
-                    }
-                    Err(err) => {
-                        errors.push(format!(
-                            "Failed to fetch contact with ID {}: {}",
-                            contact_id, err
-                        ));
-                    }
-                }
-            }
-        }
-        if let Some(project_id) = &time_entry.project_id {
-            if !model
-                .projects
-                .iter()
-                .any(|c| c.id.clone().unwrap_or_default() == *project_id)
-            {
-                match crate::api::get_project_by_id(
-                    &model.client,
-                    admin_id,
-                    &project_id.to_string(),
-                )
-                .await
-                {
-                    Ok(project) => {
-                        model.log_success(format!(
-                            "Fetched project with ID: {}; name: {}",
-                            project_id,
-                            project.name.clone().unwrap_or_default()
-                        ));
-                        model.projects.push(project);
-                    }
-                    Err(err) => {
-                        errors.push(format!(
-                            "Failed to fetch project with ID {}: {}",
-                            project_id, err
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    // Display errors if any
-    if !errors.is_empty() {
-        // Just show the first error to avoid overwhelming the user
-        if errors.len() == 1 {
-            model.log_error(errors[0].clone());
-            crate::ui::show_error(model, errors[0].clone());
-        } else {
-            model.log_error(format!(
-                "Failed to fetch {} items. First error: {}",
-                errors.len(),
-                errors[0]
-            ));
-            crate::ui::show_error(
-                model,
-                format!(
-                    "Failed to fetch {} items. First error: {}",
-                    errors.len(),
-                    errors[0]
-                ),
-            );
         }
     }
 }
