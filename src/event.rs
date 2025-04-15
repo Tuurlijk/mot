@@ -19,6 +19,7 @@ pub enum Message {
 
     EditTimeEntry,
     EditTimeEntryCancel,
+    EditTimeEntryFieldClick(crate::model::EditField),
     EditTimeEntryKeyPress(KeyEvent),
     EditTimeEntryNextField,
     EditTimeEntryPreviousField,
@@ -386,11 +387,31 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
 }
 
 fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Message> {
-    if !model.modal_stack.is_empty() || model.edit_state.active {
-        // Ignore mouse events when a modal is open or in edit mode
+    if !model.modal_stack.is_empty() {
+        // Ignore mouse events when a modal is open
         return None;
     }
 
+    // Handle clicks in edit mode
+    if model.edit_state.active && mouse.kind == MouseEventKind::Down(event::MouseButton::Left) {
+        let mouse_pos = ratatui::layout::Position {
+            x: mouse.column,
+            y: mouse.row,
+        };
+        
+        // Check if click is on any of the stored field areas
+        for (&field, &area) in &model.edit_state.field_areas {
+            if area.contains(mouse_pos) {
+                model.log_debug(format!("Click detected on field: {:?}", field));
+                return Some(Message::EditTimeEntryFieldClick(field));
+            }
+        }
+        
+        // Click was in edit mode but not on any field
+        return None;
+    }
+
+    // Handle normal mode clicks time entry table
     match mouse.kind {
         MouseEventKind::ScrollDown => Some(Message::TimeEntrySelectPrevious),
         MouseEventKind::ScrollUp => Some(Message::TimeEntrySelectNext),

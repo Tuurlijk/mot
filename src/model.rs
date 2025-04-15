@@ -221,6 +221,9 @@ pub(crate) struct EditState {
 
     // Autocomplete state for contact selection
     pub(crate) contact_autocomplete: AutocompleteState<Contact>,
+    
+    // Areas of each field for click detection
+    pub(crate) field_areas: std::collections::HashMap<EditField, Rect>,
 }
 
 impl EditState {
@@ -349,7 +352,7 @@ impl From<EditState> for crate::moneybird::types::TimeEntry {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub(crate) enum EditField {
     Description,
     Project,
@@ -390,6 +393,7 @@ pub(crate) struct AppModel {
     pub modal_interaction: ModalInteraction,
     pub key_debounce: KeyDebounce,
     pub table_area: Option<Rect>,
+    pub edit_form_area: Option<Rect>,
 }
 
 impl Default for AppModel {
@@ -418,6 +422,7 @@ impl Default for AppModel {
             modal_interaction: ModalInteraction::new(300), // 300ms cooldown for modals
             key_debounce: KeyDebounce::new(200),           // 200ms cooldown for keypresses
             table_area: None,
+            edit_form_area: None,
         }
     }
 }

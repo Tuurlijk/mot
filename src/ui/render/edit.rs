@@ -11,6 +11,12 @@ use ratatui::Frame;
 
 /// Render the time entry edit form
 pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Frame) {
+    // Store the edit form area in the model for click detection
+    model.edit_form_area = Some(area);
+    
+    // Clear previous field areas
+    model.edit_state.field_areas.clear();
+    
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Pair("Tab", "Change focus"),
         Shortcut::Pair("Ctrl+S", "Save"),
@@ -93,12 +99,19 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
             .wrap(Wrap { trim: true });
         frame.render_widget(description_para, chunks[1]);
     }
+    // Store description field area
+    model.edit_state.field_areas.insert(EditField::Description, chunks[1]);
 
     // Project & Contact section
     let chunks_row = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(chunks[3]);
 
     let contact_area = chunks_row[0];
+    let project_area = chunks_row[1];
+    
+    // Store contact and project field areas
+    model.edit_state.field_areas.insert(EditField::Contact, contact_area);
+    model.edit_state.field_areas.insert(EditField::Project, project_area);
 
     // Contact selection
     let transform_contact_fn = |contact: &crate::moneybird::types::Contact| -> String {
@@ -210,6 +223,12 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         Constraint::Percentage(25),
     ])
     .split(chunks[5]);
+    
+    // Store date and time field areas
+    model.edit_state.field_areas.insert(EditField::StartTime, date_time_row[0]);
+    model.edit_state.field_areas.insert(EditField::EndTime, date_time_row[1]);
+    model.edit_state.field_areas.insert(EditField::StartDate, date_time_row[2]);
+    model.edit_state.field_areas.insert(EditField::EndDate, date_time_row[3]);
 
     let selected_field = model.edit_state.selected_field;
 

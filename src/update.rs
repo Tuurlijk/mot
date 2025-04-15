@@ -1188,5 +1188,21 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
+        
+        Message::EditTimeEntryFieldClick(field) => {
+            if model.edit_state.active {
+                // Save current field data before changing fields
+                update_edit_field_from_editor(&mut model.edit_state);
+                
+                // Set the new field
+                model.edit_state.selected_field = field;
+                
+                // Initialize editor for the new field
+                initialize_editor_or_autocomplete(&mut model.edit_state);
+                
+                model.log_debug(format!("Clicked on field: {:?}", field));
+            }
+            None
+        }
     }
 }
