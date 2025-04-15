@@ -1,5 +1,6 @@
 // Allow dead code for moneybird.rs, which is generated
 #![allow(dead_code)]
+#![allow(unused_imports)]
 
 mod api;
 mod cmd;
