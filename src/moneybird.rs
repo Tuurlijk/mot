@@ -10060,5 +10060,5 @@ pub mod builder {
 }
 /// Items consumers will typically use such as the Client.
 pub mod prelude {
-    
+    pub use self::super::Client;
 }
