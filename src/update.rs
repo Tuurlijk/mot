@@ -339,9 +339,9 @@ fn handle_modal_close(
 
         // Process the next message candidate
         match next_message_candidate {
-            Some(Message::Refresh) => {
+            Some(Message::TimeEntryRefresh) => {
                 // Return Refresh for the main loop to handle asynchronously
-                Some(Message::Refresh)
+                Some(Message::TimeEntryRefresh)
             }
             Some(Message::ExecuteExport) => {
                 // Call the export handler directly for synchronous action
@@ -366,38 +366,38 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::PreviousWeek => {
+        Message::TimeEntryPreviousWeek => {
             model.week_offset -= 1;
             model.log_notice(format!(
                 "Navigating to previous week (offset: {})",
                 model.week_offset
             ));
-            Some(Message::Refresh)
+            Some(Message::TimeEntryRefresh)
         }
 
-        Message::NextWeek => {
+        Message::TimeEntryNextWeek => {
             model.week_offset += 1;
             model.log_notice(format!(
                 "Navigating to next week (offset: {})",
                 model.week_offset
             ));
-            Some(Message::Refresh)
+            Some(Message::TimeEntryRefresh)
         }
 
-        Message::CurrentWeek => {
+        Message::TimeEntryCurrentWeek => {
             model.week_offset = 0;
             model.log_notice("Navigating to current week");
-            Some(Message::Refresh)
+            Some(Message::TimeEntryRefresh)
         }
 
-        Message::Refresh => {
+        Message::TimeEntryRefresh => {
             model.log_notice("Manually refreshing time entries");
             get_time_entries(model).await;
             model.log_success("The time entries have been refreshed.");
             None
         }
 
-        Message::SelectNext => {
+        Message::TimeEntrySelectNext => {
             if model.time_entries_for_table.is_empty() {
                 return None;
             }
@@ -409,7 +409,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::SelectPrevious => {
+        Message::TimeEntrySelectPrevious => {
             if model.time_entries_for_table.is_empty() {
                 return None;
             }
@@ -421,20 +421,20 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::SearchShow => {
+        Message::TimeEntrySearchShow => {
             model.search_state.active = true;
             model.search_state.text_input = TextArea::default();
             None
         }
 
-        Message::SearchHide => {
+        Message::TimeEntrySearchHide => {
             model.search_state.active = false;
             model.time_entries_for_table = model.time_entries_for_table_backup.clone();
             model.ensure_valid_selection();
             None
         }
 
-        Message::Export => {
+        Message::TimeEntryExport => {
             if !model.time_entries_for_table.is_empty() {
                 ui::show_confirmation(
                     model,
@@ -478,7 +478,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
         }
 
-        Message::ClearSearch => {
+        Message::TimeEntryClearSearch => {
             if model.search_state.active {
                 model.search_state.text_input = TextArea::default();
                 model.filter_items();
@@ -486,7 +486,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::SearchKeyPress(key) => {
+        Message::TimeEntrySearchKeyPress(key) => {
             if model.search_state.active {
                 model.search_state.text_input.input(key);
                 model.filter_items();
@@ -855,7 +855,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::DeleteTimeEntry => {
+        Message::TimeEntryDelete => {
             if let Some(selected_idx) = model.time_entry_table_state.selected() {
                 if selected_idx < model.time_entries_for_table.len() {
                     let entry_description = model.time_entries_for_table[selected_idx]
@@ -915,7 +915,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::SelectProject => {
+        Message::EditTimeEntrySelectProject => {
             if model.edit_state.active
                 && model.edit_state.selected_field == crate::model::EditField::Project
             {
@@ -925,7 +925,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::SelectContact => {
+        Message::EditTimeEntrySelectContact => {
             if model.edit_state.active
                 && model.edit_state.selected_field == crate::model::EditField::Contact
             {
@@ -1080,7 +1080,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::CreateTimeEntry => {
+        Message::TimeEntryCreate => {
             model.log_notice("Initiating new time entry creation");
 
             // Reset edit state for a new entry
@@ -1181,7 +1181,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                         model.log_success("User ID saved to configuration.");
                         model.user_selection_active = false; // Update state
                                                              // Trigger refresh to load data now that user is selected
-                        Some(Message::Refresh)
+                        Some(Message::TimeEntryRefresh)
                     }
                     Err(e) => {
                         model.log_error(format!("Failed to save configuration: {}", e));
@@ -1206,6 +1206,13 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 // If not user_selection_active, just do nothing
                 None
             }
+        }
+
+        Message::TimeEntrySelectRow(index) => {
+            if index < model.time_entries_for_table.len() {
+                model.time_entry_table_state.select(Some(index));
+            }
+            None
         }
     }
 }

@@ -3,6 +3,8 @@ use chrono_tz::Tz;
 use ratatui::{
     style::{Color, Style},
     widgets::TableState,
+    crossterm::event::{KeyCode, KeyEvent},
+    layout::Rect,
 };
 use supports_color::ColorLevel;
 use tui_textarea::TextArea;
@@ -386,12 +388,13 @@ pub(crate) struct AppModel {
     pub edit_state: EditState,
     pub modal_interaction: ModalInteraction,
     pub key_debounce: KeyDebounce,
+    pub table_area: Option<Rect>,
 }
 
 impl Default for AppModel {
     fn default() -> Self {
         Self {
-            config: crate::config::get_configuration(),
+            config: Configuration::default(),
             running_state: RunningState::default(),
             client: crate::api::create_moneybird_client(&crate::config::get_configuration()),
             administration: Administration::default(),
@@ -413,6 +416,7 @@ impl Default for AppModel {
             edit_state: EditState::default(),
             modal_interaction: ModalInteraction::new(300), // 300ms cooldown for modals
             key_debounce: KeyDebounce::new(200),           // 200ms cooldown for keypresses
+            table_area: None,
         }
     }
 }

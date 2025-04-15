@@ -7,6 +7,9 @@ use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Row, Tabl
 use ratatui::Frame;
 
 pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut Frame) {
+    // Store the table area for mouse click detection
+    model.table_area = Some(area);
+
     let header = Row::new(vec!["Date", "Time", "Client", "Project", "Description"])
         .style(model.appearance.default_style.add_modifier(Modifier::BOLD))
         .height(1);

@@ -5,46 +5,52 @@ use std::time::Duration;
 
 #[derive(PartialEq, Clone)]
 pub enum Message {
-    SearchKeyPress(KeyEvent),
-    SelectNext,
-    SelectPrevious,
-    Export,
-    ExecuteExport,
+    AutocompleteClearInput,
+    AutocompleteKeyPress(KeyEvent),
+    AutocompleteNextItem,
+    AutocompletePreviousItem,
+    AutocompleteRefresh,
+    AutocompleteResultsContact(Vec<crate::moneybird::types::Contact>),
+    AutocompleteResultsProject(Vec<crate::moneybird::types::Project>),
+    AutocompleteSelect,
+
     ConfirmModal(String),
-    DismissModal(String, bool), // Modal ID and isCancel flag
-    DeleteTimeEntry,
-    ExecuteDeleteTimeEntry(String),
-    ClearSearch,
-    Quit,
-    PreviousWeek,
-    NextWeek,
-    CurrentWeek,
-    Refresh,
-    SearchShow,
-    SearchHide,
-    ToggleLogPanel,
-    EditTimeEntryKeyPress(KeyEvent),
+    DismissModal(String, bool),
+
     EditTimeEntry,
-    EditTimeEntrySave,
     EditTimeEntryCancel,
+    EditTimeEntryKeyPress(KeyEvent),
     EditTimeEntryNextField,
     EditTimeEntryPreviousField,
-    SelectProject,
-    SelectContact,
-    // Generic Autocomplete Messages
-    AutocompleteKeyPress(KeyEvent), // Handles character input and backspace
-    AutocompleteSelect,             // Handles selecting an item (e.g., with Enter)
-    AutocompleteRefresh,            // Triggers a refresh/filter of suggestions
-    AutocompleteNextItem,           // Navigates down in the suggestion list
-    AutocompletePreviousItem,       // Navigates up in the suggestion list
-    AutocompleteClearInput,         // Clears the autocomplete input (e.g., Ctrl+U)
-    AutocompleteResultsProject(Vec<crate::moneybird::types::Project>), // Specific results for projects
-    AutocompleteResultsContact(Vec<crate::moneybird::types::Contact>), // Specific results for contacts
-    CreateTimeEntry, // New message to initiate creation
-    // User Selection Messages
+    EditTimeEntrySave,
+    EditTimeEntrySelectContact,
+    EditTimeEntrySelectProject,
+
+    ExecuteDeleteTimeEntry(String),
+    ExecuteExport,
+
+    Quit,
+
+    TimeEntryClearSearch,
+    TimeEntryCreate,
+    TimeEntryCurrentWeek,
+    TimeEntryDelete,
+    TimeEntryExport,
+    TimeEntryNextWeek,
+    TimeEntryPreviousWeek,
+    TimeEntryRefresh,
+    TimeEntrySearchHide,
+    TimeEntrySearchKeyPress(KeyEvent),
+    TimeEntrySearchShow,
+    TimeEntrySelectNext,
+    TimeEntrySelectPrevious,
+    TimeEntrySelectRow(usize),
+
+    ToggleLogPanel,
+
+    UserConfirmSelection,
     UserSelectNext,
     UserSelectPrevious,
-    UserConfirmSelection,
 }
 
 // Implement PartialEq for the Message enum to help with Contact Vec comparison
@@ -345,49 +351,74 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         if model.search_state.active {
             match key.code {
                 KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
-                    Some(Message::ClearSearch)
+                    Some(Message::TimeEntryClearSearch)
                 }
-                KeyCode::Char('x') => Some(Message::Export),
+                KeyCode::Char('x') => Some(Message::TimeEntryExport),
                 KeyCode::F(4) => Some(Message::EditTimeEntry),
-                KeyCode::Up => Some(Message::SelectPrevious),
-                KeyCode::Down => Some(Message::SelectNext),
-                KeyCode::Left => Some(Message::PreviousWeek),
-                KeyCode::Right => Some(Message::NextWeek),
-                KeyCode::Esc => Some(Message::SearchHide),
-                _ => Some(Message::SearchKeyPress(key)),
+                KeyCode::Up => Some(Message::TimeEntrySelectPrevious),
+                KeyCode::Down => Some(Message::TimeEntrySelectNext),
+                KeyCode::Left => Some(Message::TimeEntryPreviousWeek),
+                KeyCode::Right => Some(Message::TimeEntryNextWeek),
+                KeyCode::Esc => Some(Message::TimeEntrySearchHide),
+                _ => Some(Message::TimeEntrySearchKeyPress(key)),
             }
         } else {
             match key.code {
-                KeyCode::Char('x') => Some(Message::Export),
+                KeyCode::Char('x') => Some(Message::TimeEntryExport),
                 KeyCode::F(4) => Some(Message::EditTimeEntry),
-                KeyCode::Char('h') | KeyCode::Left => Some(Message::PreviousWeek),
-                KeyCode::Char('j') | KeyCode::Down => Some(Message::SelectNext),
-                KeyCode::Char('k') | KeyCode::Up => Some(Message::SelectPrevious),
-                KeyCode::Char('l') | KeyCode::Right => Some(Message::NextWeek),
+                KeyCode::Char('h') | KeyCode::Left => Some(Message::TimeEntryPreviousWeek),
+                KeyCode::Char('j') | KeyCode::Down => Some(Message::TimeEntrySelectNext),
+                KeyCode::Char('k') | KeyCode::Up => Some(Message::TimeEntrySelectPrevious),
+                KeyCode::Char('l') | KeyCode::Right => Some(Message::TimeEntryNextWeek),
                 KeyCode::Char('q') => Some(Message::Quit),
                 KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
                     Some(Message::EditTimeEntry)
                 }
-                KeyCode::Char('c') => Some(Message::CreateTimeEntry),
-                KeyCode::Char('t') => Some(Message::CurrentWeek),
-                KeyCode::Char('r') => Some(Message::Refresh),
-                KeyCode::Char('f') | KeyCode::Char('/') => Some(Message::SearchShow),
-                KeyCode::Char('d') | KeyCode::Delete => Some(Message::DeleteTimeEntry),
+                KeyCode::Char('c') => Some(Message::TimeEntryCreate),
+                KeyCode::Char('t') => Some(Message::TimeEntryCurrentWeek),
+                KeyCode::Char('r') => Some(Message::TimeEntryRefresh),
+                KeyCode::Char('f') | KeyCode::Char('/') => Some(Message::TimeEntrySearchShow),
+                KeyCode::Char('d') | KeyCode::Delete => Some(Message::TimeEntryDelete),
                 _ => None,
             }
         }
     }
 }
 
-fn handle_mouse(mouse: event::MouseEvent, model: &AppModel) -> Option<Message> {
-    if !model.modal_stack.is_empty() {
+fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Message> {
+    if !model.modal_stack.is_empty() || model.edit_state.active {
+        // Ignore mouse events when a modal is open or in edit mode
         return None;
     }
 
     match mouse.kind {
-        MouseEventKind::ScrollDown => Some(Message::SelectPrevious),
-        MouseEventKind::ScrollUp => Some(Message::SelectNext),
-        _ => None,
+        MouseEventKind::ScrollDown => Some(Message::TimeEntrySelectPrevious),
+        MouseEventKind::ScrollUp => Some(Message::TimeEntrySelectNext),
+        MouseEventKind::Down(button) if button == event::MouseButton::Left => {
+            if let Some(table_area) = model.table_area {
+                // Check if the click is within the table's bounds
+                if table_area.contains(ratatui::layout::Position {
+                    x: mouse.column,
+                    y: mouse.row,
+                }) {
+                    // Adjust for table header (1 row) and top border (1 row)
+                    let relative_row = mouse.row.saturating_sub(table_area.y + 2);
+                    let selected_index =
+                        model.time_entry_table_state.offset() + relative_row as usize;
+
+                    // Ensure the calculated index is within the bounds of the data
+                    if selected_index < model.time_entries_for_table.len() {
+                        model.log_debug(format!(
+                            "Mouse click detected on row: {}. Selected index: {}",
+                            relative_row, selected_index
+                        ));
+                        return Some(Message::TimeEntrySelectRow(selected_index));
+                    }
+                }
+            }
+            None // Click was outside table area
+        }
+        _ => None, // Ignore other mouse events
     }
 }
 
