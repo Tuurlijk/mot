@@ -110,7 +110,8 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 
 ## 🛣️ Roadmap
 
-- [ ] Add screenshot before release
+- [x] Add screenshot before release
+- [ ] Add vhs gif recording with dummy data
 - [x] Filter view by client and project
 - [x] Export filtered CSV for a given week number
 - [x] Internal logging + logging pane
