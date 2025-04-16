@@ -1,7 +1,13 @@
-name: Build and test
+name: Build and Test
 
 on:
   push:
+    branches: [ "main" ]
+    paths-ignore:
+    - 'LICENSE'
+    - 'README.md'
+    - 'RELEASE_CHECKLIST.md'
+  pull_request:
     branches: [ "main" ]
     paths-ignore:
     - 'LICENSE'
@@ -12,50 +18,41 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build_and_test_linux:
-    name: Build and test on GNU/Linux
-    runs-on: ubuntu-latest
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
 
     steps:
-    - run: git config --global core.autocrlf false
-
-    - name: "Checkout repository"
-      uses: actions/checkout@v4
-    
-    - name: Build
-      run: cargo build --all --locked --verbose
-    
-    - name: Run tests
-      run: cargo test --verbose
-
-  build_and_test_macos:
-    name: Build and test on macOS
-    runs-on: macos-latest
-
-    steps:
-    - run: git config --global core.autocrlf false
-
-    - name: "Checkout repository"
-      uses: actions/checkout@v4
-
-    - name: Build
-      run: cargo build --all --locked --verbose
-
-    - name: Run tests
-      run: cargo test --verbose
-
-  build_and_test_windows:
-    name: Build and test on Windows
-    runs-on: windows-latest
-
-    steps:
-    - run: git config --global core.autocrlf false
-
-    - name: "Checkout repository"
-      uses: actions/checkout@v4
-
-    - name: Build
-      run: cargo build --all --locked --verbose
-
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Windows git setup
+        if: matrix.os == 'windows-latest'
+        run: git config --global core.autocrlf false
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Add a small unique value to key to avoid cache conflicts
+          # between jobs
+          key: ${{ matrix.os }}
+      
+      - name: Build
+        run: cargo build --all --locked
+      
+      - name: Run tests
+        run: cargo test --all
