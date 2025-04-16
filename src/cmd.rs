@@ -37,8 +37,8 @@ fn about_str() -> &'static str {
      {}
      {}
  ",
-        t!("cmd_app_title").to_string(),
-        t!("cmd_app_credits").to_string(),
+        t!("cmd_app_title"),
+        t!("cmd_app_credits"),
         dynamic_value
     );
 
