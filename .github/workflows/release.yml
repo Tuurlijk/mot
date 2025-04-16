@@ -134,8 +134,19 @@ jobs:
       - name: Build binary
         shell: bash
         run: |
-          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            # Use cross for Linux ARM64 build
+          # Set environment variables for the build
+          export CARGO_NET_RETRY=5
+          export RUST_BACKTRACE=1
+          
+          if [[ "${{ matrix.target }}" == "riscv64gc-unknown-linux-gnu" ]]; then
+            # For RISC-V builds, ensure rustls is used
+            if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+              cross build --release --target=${{ matrix.target }}
+            else
+              cargo build --release --target=${{ matrix.target }}
+            fi
+          elif [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            # Use cross for other cross-compile targets
             cross build --release --target=${{ matrix.target }}
           else
             # Use cargo for all other targets

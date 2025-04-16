@@ -1,0 +1,27 @@
+# Configuration for cross-compiling various targets
+
+# Generic settings for all targets
+[build]
+xargo = false
+
+# RISC-V 64-bit target
+[target.riscv64gc-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:latest"
+# Add any RISC-V specific build arguments here
+# No need for OpenSSL since we're using rustls
+
+# Generic ARM64 settings
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
+
+# Generic ARM32 settings (armv7)
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest"
+
+# Raspberry Pi ARM32 settings
+[target.arm-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:latest"
+
+# 32-bit x86 settings
+[target.i686-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/i686-unknown-linux-gnu:latest" 

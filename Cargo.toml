@@ -20,7 +20,7 @@ tui-textarea = "0.7.0"
 color-eyre = "0.6.3"
 progenitor-client = "0.9.1"
 
-reqwest = { version = "0.12", features = ["json", "stream", "native-tls"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
 dirs = "6.0.0"
@@ -34,10 +34,6 @@ tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 supports-color = "3.0.0"
 terminal-light = "1.7.0"
 rust-i18n = "3.1.4"
-
-# Use vendored OpenSSL for non-Windows platforms only
-[target.'cfg(not(windows))'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
 
 [build-dependencies]
 prettyplease = "0.2.22"
