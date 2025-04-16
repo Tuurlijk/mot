@@ -1,4 +1,12 @@
 _version: 1
+# Command line interface
+cmd_app_title: "Moneybird Terminal"
+cmd_app_credits: "Een TUI voor Moneybird Tijdregistratie"
+cmd_export_help: "Exporteer tijdregistraties naar een csv bestand"
+cmd_week_help: "Weeknummer om te exporteren"
+cmd_query_help: "Filter zoekopdracht"
+cmd_language_help: "Stel de weergavetaal in (bijv. en, nl)"
+
 # Error messages
 error_no_users: "Geen gebruikers gevonden voor deze administratie. Kan niet doorgaan."
 error_fetch_users: "Ophalen van gebruikers mislukt: %{error}. Controleer de configuratie of connectiviteit."
@@ -221,4 +229,5 @@ event_confirming_modal: "Modal bevestigen: %{modal_id} met toets: %{key}"
 event_cancelling_modal: "Modal annuleren: %{modal_id} met toets: %{key}"
 event_dismissing_modal: "Modal sluiten: %{modal_id} met toets: %{key}"
 event_ignoring_unhandled_key: "Negeren van onverwerkte toets (%{key}) in project/contact veld"
-event_mouse_click_detected: "Muisklik gedetecteerd op rij: %{row}. Geselecteerde index: %{index}" 
+event_mouse_click_detected: "Muisklik gedetecteerd op rij: %{row}. Geselecteerde index: %{index}"
+event_toggle_log_panel: "Logpaneel geschakeld" 

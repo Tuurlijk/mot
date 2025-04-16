@@ -1,4 +1,12 @@
 _version: 1
+# Command line interface
+cmd_app_title: "Moneybird Terminal"
+cmd_app_credits: "A TUI for Moneybird Time Tracking"
+cmd_export_help: "Export time entries to a csv file"
+cmd_week_help: "Week number to export"
+cmd_query_help: "Filter query"
+cmd_language_help: "Set the display language (e.g., en, nl)"
+
 # Error messages
 error_no_users: "No users found for this administration. Cannot proceed."
 error_fetch_users: "Failed to fetch users: %{error}. Please check configuration or connectivity."
@@ -221,4 +229,5 @@ event_confirming_modal: "Confirming modal: %{modal_id} with key: %{key}"
 event_cancelling_modal: "Cancelling modal: %{modal_id} with key: %{key}"
 event_dismissing_modal: "Dismissing modal: %{modal_id} with key: %{key}"
 event_ignoring_unhandled_key: "Ignoring unhandled key (%{key}) in project/contact field"
-event_mouse_click_detected: "Mouse click detected on row: %{row}. Selected index: %{index}" 
+event_mouse_click_detected: "Mouse click detected on row: %{row}. Selected index: %{index}"
+event_toggle_log_panel: "Log panel toggled" 
