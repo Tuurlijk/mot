@@ -34,6 +34,9 @@ tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 supports-color = "3.0.0"
 terminal-light = "1.7.0"
 
+# Use vendored OpenSSL to avoid system dependencies
+openssl = { version = "0.10", features = ["vendored"] }
+
 [build-dependencies]
 prettyplease = "0.2.22"
 progenitor = "0.9.1"
