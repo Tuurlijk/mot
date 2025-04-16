@@ -28,6 +28,34 @@ jobs:
             asset_name: mot-linux-arm64
             use_cross: true
           
+          - name: Linux ARM32 (armv7)
+            os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            binary_path: target/armv7-unknown-linux-gnueabihf/release/mot
+            asset_name: mot-linux-armv7
+            use_cross: true
+          
+          - name: Linux ARM32 (Raspberry Pi)
+            os: ubuntu-latest
+            target: arm-unknown-linux-gnueabihf
+            binary_path: target/arm-unknown-linux-gnueabihf/release/mot
+            asset_name: mot-linux-arm
+            use_cross: true
+          
+          - name: Linux x86 (32-bit)
+            os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            binary_path: target/i686-unknown-linux-gnu/release/mot
+            asset_name: mot-linux-i686
+            use_cross: true
+          
+          - name: Linux RISC-V 64-bit
+            os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            binary_path: target/riscv64gc-unknown-linux-gnu/release/mot
+            asset_name: mot-linux-riscv64
+            use_cross: true
+          
           - name: Linux MUSL x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
@@ -39,6 +67,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             binary_path: target/x86_64-pc-windows-msvc/release/mot.exe
             asset_name: mot-windows-x86_64
+          
+          - name: Windows x86 (32-bit)
+            os: windows-latest
+            target: i686-pc-windows-msvc
+            binary_path: target/i686-pc-windows-msvc/release/mot.exe
+            asset_name: mot-windows-i686
           
           - name: macOS x86_64
             os: macos-latest
