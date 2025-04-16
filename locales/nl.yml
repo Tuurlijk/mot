@@ -27,6 +27,8 @@ notice_administration: "Administratie: %{id} %{name}"
 notice_no_user_id: "Geen gebruiker_id gevonden in configuratie, gebruikers ophalen voor selectie..."
 notice_language_command_line: "Gebruik taal van command line: %{language}"
 notice_language_configured: "Gebruik geconfigureerde taal: %{language}"
+notice_language_autodetected: "Gebruik gedetecteerde taal van systeem: %{language}"
+notice_language_default: "Geen taal gedetecteerd of geconfigureerd, gebruik standaard: %{language}"
 
 # Connection error 
 connection_error: "Verbindingsfout: %{error}"

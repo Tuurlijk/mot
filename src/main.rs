@@ -39,16 +39,36 @@ async fn main() -> color_eyre::Result<()> {
     };
     model.config = config::get_configuration();
 
-    // Set locale from command line arguments first, then from config if available
+    // Set locale with priority:
+    // 1. Command line arguments (highest priority)
+    // 2. Configuration file
+    // 3. System language auto-detection
+    // 4. Default to 'en' (lowest priority)
     if let Some(language) = &args.language {
+        // 1. Command line arguments
         rust_i18n::set_locale(language);
         model.log_notice(t!("notice_language_command_line", language = language));
 
         // Optionally update config with the selected language
         model.config.language = Some(language.clone());
     } else if let Some(language) = &model.config.language {
+        // 2. Configuration file
         rust_i18n::set_locale(language);
         model.log_notice(t!("notice_language_configured", language = language));
+    } else if let Some(detected_language) = config::detect_system_language() {
+        // 3. System language auto-detection
+        rust_i18n::set_locale(&detected_language);
+        model.log_notice(t!("notice_language_autodetected", language = detected_language));
+        
+        // Save the detected language to config
+        model.config.language = Some(detected_language);
+        if let Err(err) = config::save_configuration(&model.config) {
+            model.log_error(t!("update_error_saving_config", error = err.to_string()));
+        }
+    } else {
+        // 4. Default to 'en'
+        rust_i18n::set_locale("en");
+        model.log_notice(t!("notice_language_default", language = "en"));
     }
 
     // Check connectivity to the MoneyBird API but don't exit on failure

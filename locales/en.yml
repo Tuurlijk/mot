@@ -27,6 +27,8 @@ notice_administration: "Administration: %{id} %{name}"
 notice_no_user_id: "No user_id found in configuration, fetching users for selection..."
 notice_language_command_line: "Using language from command line: %{language}"
 notice_language_configured: "Using configured language: %{language}"
+notice_language_autodetected: "Using autodetected language from system: %{language}"
+notice_language_default: "No language detected or configured, using default: %{language}"
 
 # Connection error 
 connection_error: "Connection error: %{error}"

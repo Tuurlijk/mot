@@ -4,6 +4,23 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
+use locale_config::Locale;
+
+pub fn detect_system_language() -> Option<String> {
+    let locale = Locale::user_default();
+    let locale_str = locale.to_string();
+    
+    let lang_code = locale_str
+        .split(|c| c == '-' || c == '_' || c == '.')
+        .next()?
+        .to_lowercase();
+    
+    if ["en", "nl"].contains(&lang_code.as_str()) {
+        Some(lang_code)
+    } else {
+        None
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Configuration {
@@ -158,4 +175,22 @@ fn get_program_name() -> String {
             println!("{}", t!("config_executable_path_error"));
             "unknown".to_string()
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_system_language() {
+        // This test doesn't check for a specific value since system locales vary
+        // It just ensures the function returns a valid value without panicking
+        let language = detect_system_language();
+        if let Some(lang) = language {
+            // If a language was detected, it should be one we support
+            assert!(["en", "nl"].contains(&lang.as_str()), 
+                "Detected language '{}' should be one of our supported languages", lang);
+        }
+        // If None is returned, that's also valid if no supported language was found
+    }
 }
