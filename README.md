@@ -16,6 +16,7 @@ A beautiful terminal-based interface for managing your MoneyBird time entries wi
 - 🌙 Proper error handling with helpful messages
 - 🔐 Secure configuration for your API credentials
 - 🌓 Automatic detection of system theme (light/dark mode)
+- 🌐 Multilingual support with easy language switching
 
 ## 🚀 Installation
 
@@ -48,7 +49,22 @@ access_token = "your_moneybird_api_token"
 api_url = "https://moneybird.com/api/v2"
 administration_id = "your_administration_id" # Optional
 week_starts_on = "monday" # Options: monday, tuesday, wednesday, thursday, friday, saturday, sunday
+language = "en" # Options: en, nl (Optional, defaults to system language)
 ```
+
+## 🌐 Localization
+
+MOT provides full internationalization support for all user-facing text:
+
+- **Supported Languages**:
+  - English (en)
+  - Dutch (nl)
+
+- **Setting the Language**:
+  - Via command line: `mot -l nl` or `mot --language nl`
+  - Via configuration file: Add `language = "nl"` to your config.toml
+
+You can also override the language for a single session by using the command line flag, which takes precedence over the configuration file setting.
 
 ## 📖 Usage
 
@@ -122,7 +138,8 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 - [ ] Project browser
 - [ ] CRUD operations for projects
 - [x] Add ci workflows
-- [x] Localization
+- [x] Localization (English and Dutch)
+- [ ] Additional language support (contributions welcome!)
 
 ## 🤝 Contributing
 
