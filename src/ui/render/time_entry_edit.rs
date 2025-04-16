@@ -8,6 +8,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Wrap};
 use ratatui::Frame;
+use rust_i18n::t;
 
 /// Render the time entry edit form
 pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Frame) {
@@ -18,21 +19,21 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     model.edit_state.field_areas.clear();
 
     let shortcuts = Shortcuts::new(vec![
-        Shortcut::Pair("Tab", "Change focus"),
-        Shortcut::Pair("Ctrl+S", "Save"),
-        Shortcut::Pair("Esc", "Cancel"),
+        Shortcut::Pair("Tab", t!("ui_shortcut_change_focus").as_ref()),
+        Shortcut::Pair("Ctrl+S", t!("ui_shortcut_save").as_ref()),
+        Shortcut::Pair("Esc", t!("ui_shortcut_cancel").as_ref()),
     ]);
 
     // Determine title based on whether we are creating or editing
     let title = if model.edit_state.entry_id.is_empty() {
-        " Create Time Entry "
+        t!("ui_edit_title_create")
     } else {
-        " Edit Time Entry "
+        t!("ui_edit_title_edit")
     };
 
     // Create a nice block for the edit form
     let form_block = Block::default()
-        .title(title)
+        .title(title.as_ref())
         .title_alignment(Alignment::Center)
         .title_bottom(shortcuts.as_line())
         .borders(Borders::ALL)
@@ -72,7 +73,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         .border_type(BorderType::Rounded);
 
     // Description section
-    let description_label = Paragraph::new("Description")
+    let description_label = Paragraph::new(t!("ui_edit_field_description"))
         .style(
             if model.edit_state.selected_field == EditField::Description {
                 Style::default().add_modifier(Modifier::BOLD)
@@ -126,24 +127,27 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     let transform_contact_fn = |contact: &crate::moneybird::types::Contact| -> String {
         contact.company_name.clone().unwrap_or_default()
     };
+    let contact_title = t!("ui_edit_field_contact");
+    let contact_placeholder = t!("ui_edit_placeholder_contact");
     let contact_autocomplete_widget = Autocomplete::new(
         &mut model.edit_state.contact_autocomplete,
         transform_contact_fn,
     )
     .block(
         Block::default()
-            .title(" ✏️ Contact ")
+            .title(contact_title.clone())
             .padding(Padding::new(1, 0, 0, 0)),
     )
     .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
     .selected_style(Style::default().bg(Color::Green).fg(Color::White))
     .dropdown_style(Style::default())
-    .placeholder("Type to search contacts...");
+    .placeholder(contact_placeholder.as_ref());
 
     if model.edit_state.selected_field == EditField::Contact {
         // Use active block when selected
+        let active_title = format!("{}{}", t!("ui_edit_icon_active"), contact_title);
         frame.render_widget(
-            contact_autocomplete_widget.block(active_block.clone().title(" ✏️ Contact ")),
+            contact_autocomplete_widget.block(active_block.clone().title(active_title)),
             contact_area,
         );
         // Set cursor position for the active contact field
@@ -161,12 +165,12 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         let contact_display = if model.edit_state.contact_id.is_some() {
             contact_name
         } else {
-            "Contact: Select contact...".to_string()
+            t!("ui_edit_contact_empty").to_string()
         };
         let contact_label = Paragraph::new(contact_display).block(
             inactive_block
                 .clone()
-                .title(" Contact ")
+                .title(contact_title)
                 .padding(Padding::new(1, 0, 0, 0)),
         );
         frame.render_widget(contact_label, contact_area);
@@ -178,24 +182,27 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     let transform_project_fn = |project: &crate::moneybird::types::Project| -> String {
         project.name.clone().unwrap_or_default()
     };
+    let project_title = t!("ui_edit_field_project");
+    let project_placeholder = t!("ui_edit_placeholder_project");
     let project_autocomplete_widget = Autocomplete::new(
         &mut model.edit_state.project_autocomplete,
         transform_project_fn,
     )
     .block(
         Block::default()
-            .title(" ✏️ Project ")
+            .title(project_title.clone())
             .padding(Padding::new(1, 0, 0, 0)),
     )
     .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
     .selected_style(Style::default().bg(Color::Green).fg(Color::White))
     .dropdown_style(Style::default())
-    .placeholder("Type to search projects...");
+    .placeholder(project_placeholder.as_ref());
 
     if model.edit_state.selected_field == EditField::Project {
         // Use active block when selected
+        let active_title = format!("{}{}", t!("ui_edit_icon_active"), project_title);
         frame.render_widget(
-            project_autocomplete_widget.block(active_block.clone().title(" ✏️ Project ")),
+            project_autocomplete_widget.block(active_block.clone().title(active_title)),
             project_area,
         );
         // Set cursor position for the active project field
@@ -213,12 +220,12 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         let project_display = if model.edit_state.project_id.is_some() {
             project_name
         } else {
-            "Project: Select project...".to_string()
+            t!("ui_edit_project_empty").to_string()
         };
         let project_label = Paragraph::new(project_display).block(
             inactive_block
                 .clone()
-                .title(" Project ")
+                .title(project_title)
                 .padding(Padding::new(1, 0, 0, 0)),
         );
         frame.render_widget(project_label, project_area);
@@ -254,62 +261,74 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     let selected_field = model.edit_state.selected_field;
 
     // Start time field
-    let start_time_label = " Start time ";
+    let start_time_label = t!("ui_edit_field_start_time");
     if selected_field == EditField::StartTime {
-        model.edit_state.editor.set_block(
-            active_block
-                .clone()
-                .title(format!(" ✏️ {}", start_time_label)),
-        );
+        model
+            .edit_state
+            .editor
+            .set_block(active_block.clone().title(format!(
+                "{}{}",
+                t!("ui_edit_icon_active"),
+                start_time_label
+            )));
         frame.render_widget(&model.edit_state.editor, date_time_row[0]);
     } else {
         let widget = Paragraph::new(model.edit_state.start_time.clone())
-            .block(inactive_block.clone().title(start_time_label));
+            .block(inactive_block.clone().title(start_time_label.as_ref()));
         frame.render_widget(widget, date_time_row[0]);
     }
 
     // End time field
-    let end_time_label = " End time ";
+    let end_time_label = t!("ui_edit_field_end_time");
     if selected_field == EditField::EndTime {
-        model.edit_state.editor.set_block(
-            active_block
-                .clone()
-                .title(format!(" ✏️ {}", end_time_label)),
-        );
+        model
+            .edit_state
+            .editor
+            .set_block(active_block.clone().title(format!(
+                "{}{}",
+                t!("ui_edit_icon_active"),
+                end_time_label
+            )));
         frame.render_widget(&model.edit_state.editor, date_time_row[1]);
     } else {
         let widget = Paragraph::new(model.edit_state.end_time.clone())
-            .block(inactive_block.clone().title(end_time_label));
+            .block(inactive_block.clone().title(end_time_label.as_ref()));
         frame.render_widget(widget, date_time_row[1]);
     }
 
     // Start date field
-    let start_date_label = " Start date ";
+    let start_date_label = t!("ui_edit_field_start_date");
     if selected_field == EditField::StartDate {
-        model.edit_state.editor.set_block(
-            active_block
-                .clone()
-                .title(format!(" ✏️ {}", start_date_label)),
-        );
+        model
+            .edit_state
+            .editor
+            .set_block(active_block.clone().title(format!(
+                "{}{}",
+                t!("ui_edit_icon_active"),
+                start_date_label
+            )));
         frame.render_widget(&model.edit_state.editor, date_time_row[2]);
     } else {
         let widget = Paragraph::new(model.edit_state.start_date.clone())
-            .block(inactive_block.clone().title(start_date_label));
+            .block(inactive_block.clone().title(start_date_label.as_ref()));
         frame.render_widget(widget, date_time_row[2]);
     }
 
     // End date field
-    let end_date_label = " End date ";
+    let end_date_label = t!("ui_edit_field_end_date");
     if selected_field == EditField::EndDate {
-        model.edit_state.editor.set_block(
-            active_block
-                .clone()
-                .title(format!(" ✏️ {}", end_date_label)),
-        );
+        model
+            .edit_state
+            .editor
+            .set_block(active_block.clone().title(format!(
+                "{}{}",
+                t!("ui_edit_icon_active"),
+                end_date_label
+            )));
         frame.render_widget(&model.edit_state.editor, date_time_row[3]);
     } else {
         let widget = Paragraph::new(model.edit_state.end_date.clone())
-            .block(inactive_block.clone().title(end_date_label));
+            .block(inactive_block.clone().title(end_date_label.as_ref()));
         frame.render_widget(widget, date_time_row[3]);
     }
 

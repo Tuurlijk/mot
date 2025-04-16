@@ -5,6 +5,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::TableState,
 };
+use rust_i18n::t;
 use supports_color::ColorLevel;
 use tui_textarea::TextArea;
 
@@ -445,17 +446,17 @@ impl AppModel {
                 self.time_entry_table_state.select(Some(selected_idx));
             } else if let Some(selected) = self.time_entry_table_state.selected() {
                 if selected >= self.time_entries.len() {
-                    self.log_warning(format!("Selected index out of bounds: {}", selected));
+                    self.log_warning(t!("model_selected_index_out_of_bounds", index = selected));
                     self.time_entry_table_state.select(Some(0));
                 }
             } else if !self.time_entries_for_table.is_empty() {
                 // If current selection is out of bounds but we have items, select first item
                 self.time_entry_table_state.select(Some(0));
-                self.log_warning("Selected index out of bounds".to_string());
+                self.log_warning(t!("model_selected_index_out_of_bounds_generic"));
             } else {
                 // No items left, clear selection
                 self.time_entry_table_state.select(None);
-                self.log_warning("No items left, clear selection".to_string());
+                self.log_warning(t!("model_no_items_clear_selection"));
             }
         }
     }

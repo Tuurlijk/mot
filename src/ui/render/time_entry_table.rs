@@ -5,12 +5,20 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Row, Table};
 use ratatui::Frame;
+use rust_i18n::t;
 
 pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     // Store the table area for mouse click handling
     model.table_area = Some(area);
 
-    let header = Row::new(vec!["Date", "Time", "Client", "Project", "Description"])
+    let header_cols = vec![
+        t!("ui_table_header_date").to_string(),
+        t!("ui_table_header_time").to_string(),
+        t!("ui_table_header_client").to_string(),
+        t!("ui_table_header_project").to_string(),
+        t!("ui_table_header_description").to_string(),
+    ];
+    let header = Row::new(header_cols)
         .style(model.appearance.default_style.add_modifier(Modifier::BOLD))
         .height(1);
 
@@ -54,14 +62,16 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
             acc + (hours * 60 + minutes)
         });
 
+    let title_week_prefix = t!("ui_table_title_week");
+    let title_separator = t!("ui_table_title_separator");
     let mut title_spans = vec![
-        Span::from(" week "),
+        Span::from(title_week_prefix.to_string()),
         week_num.to_string().bold().green(),
         Span::from(" "),
         Span::from(year.to_string()),
-        Span::from(" / "),
+        Span::from(title_separator.to_string()),
         Span::from(week_relative),
-        Span::from(" / "),
+        Span::from(title_separator.to_string()),
     ];
 
     let total_time_style = Style::default().bold().yellow();
@@ -126,22 +136,10 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
         Constraint::Fill(1),                      // Description (fills remaining space)
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC))
-        .block(
-            Block::default()
-                .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                .border_type(BorderType::Rounded)
-                .padding(Padding::new(1, 1, 0, 0))
-                .title(Line::from(title_spans.clone()))
-                .title_alignment(Alignment::Center)
-                .style(model.appearance.default_style),
-        );
-
     // If table is empty, render empty state
     if model.time_entries_for_table.is_empty() {
-        let empty_state = Paragraph::new("No time entries found for this week")
+        let empty_message = t!("ui_table_empty_state");
+        let empty_state = Paragraph::new(empty_message)
             .alignment(Alignment::Center)
             .block(
                 Block::default()
@@ -155,6 +153,22 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
 
         frame.render_widget(empty_state, area);
     } else {
+        // Create the table widget
+        let table = Table::new(rows, widths)
+            .header(header)
+            .row_highlight_style(
+                Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC),
+            )
+            .block(
+                Block::default()
+                    .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
+                    .border_type(BorderType::Rounded)
+                    .padding(Padding::new(1, 1, 0, 0))
+                    .title(Line::from(title_spans.clone())) // Clone needed here
+                    .title_alignment(Alignment::Center)
+                    .style(model.appearance.default_style),
+            );
+
         frame.render_stateful_widget(table, area, &mut model.time_entry_table_state);
     }
 }

@@ -6,6 +6,7 @@ use ratatui::{
         Block, Borders, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
     },
 };
+use rust_i18n::t;
 use std::time::{Duration, Instant};
 
 /// State for an autocomplete dropdown
@@ -249,13 +250,13 @@ where
 
             if self.state.is_loading {
                 // Show loading indicator
-                let loading = Paragraph::new("Loading...")
+                let loading = Paragraph::new(t!("ui_loading"))
                     .style(self.input_style)
                     .block(Block::default().borders(Borders::ALL));
                 loading.render(dropdown_area, buf);
             } else if self.state.items.is_empty() {
                 // Show "no results" message
-                let no_results = Paragraph::new("No matching items found")
+                let no_results = Paragraph::new(t!("ui_no_matching_items"))
                     .style(self.input_style)
                     .block(Block::default().borders(Borders::ALL));
                 no_results.render(dropdown_area, buf);

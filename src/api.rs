@@ -4,6 +4,7 @@ use crate::moneybird::{self, types::Administration};
 use crate::{datetime, AppModel, TimeEntryForTable};
 use color_eyre::eyre::Result;
 use reqwest::Response;
+use rust_i18n::t;
 use serde_json::Value;
 
 pub(crate) fn create_moneybird_client(client_config: &Configuration) -> moneybird::Client {
@@ -78,7 +79,7 @@ pub(crate) async fn handle_api_error(response: Response, context: &str) -> Resul
     };
 
     // Add information about the URL that was called
-    let error_with_url = format!("{}\nAPI URL: {}", error_text, url);
+    let error_with_url = t!("api_error_with_url", error_text = error_text, url = url);
 
     Err(color_eyre::eyre::eyre!("{}: {}", context, error_with_url))
 }
@@ -90,14 +91,14 @@ pub(crate) async fn get_first_administration(client: &moneybird::Client) -> Resu
             administrations
                 .first()
                 .cloned()
-                .ok_or_else(|| color_eyre::eyre::eyre!("No administrations found"))
+                .ok_or_else(|| color_eyre::eyre::eyre!(t!("api_no_administrations_found")))
         }
         Err(err) => {
             // Since we can't directly access the response, we'll use a generic error message
-            Err(color_eyre::eyre::eyre!(
-                "Failed to get administrations: {}",
-                err
-            ))
+            Err(color_eyre::eyre::eyre!(t!(
+                "api_failed_get_administrations",
+                error = err
+            )))
         }
     }
 }
@@ -115,16 +116,16 @@ pub(crate) async fn get_administration_by_id(
                     administration.id.clone().unwrap_or_default() == administration_id
                 })
                 .ok_or_else(|| {
-                    color_eyre::eyre::eyre!(
-                        "Administration with ID {} not found",
-                        administration_id
-                    )
+                    color_eyre::eyre::eyre!(t!(
+                        "api_administration_not_found",
+                        id = administration_id
+                    ))
                 })
         }
-        Err(err) => Err(color_eyre::eyre::eyre!(
-            "Failed to get administrations: {}",
-            err
-        )),
+        Err(err) => Err(color_eyre::eyre::eyre!(t!(
+            "api_failed_get_administrations",
+            error = err
+        ))),
     }
 }
 
@@ -145,9 +146,9 @@ pub(crate) async fn get_all_contacts(
             .collect()),
         Err(err) => {
             let endpoint = "contacts.json";
-            let context = format!(
-                "Failed to get contacts for administration {}",
-                administration_id
+            let context = t!(
+                "api_failed_get_all_contacts",
+                administration_id = administration_id
             );
             handle_moneybird_error(err, &context, endpoint, "GET", administration_id).await?;
             unreachable!();
@@ -170,7 +171,7 @@ pub(crate) async fn get_contact_by_id(
         Ok(response) => Ok(response.into_inner().into()),
         Err(err) => {
             let endpoint = format!("contacts/{}.json", contact_id);
-            let context = format!("Failed to get contact {}", contact_id);
+            let context = t!("api_failed_get_contact", contact_id = contact_id).to_string();
             handle_moneybird_error(err, &context, &endpoint, "GET", administration_id).await?;
             unreachable!();
         }
@@ -196,7 +197,7 @@ pub(crate) async fn get_contacts_by_query(
             .collect()),
         Err(err) => {
             let endpoint = format!("contacts.json?query={}", query);
-            let context = format!("Failed to get contacts by query {}", query);
+            let context = t!("api_failed_get_contacts_query", query = query).to_string();
             handle_moneybird_error(err, &context, &endpoint, "GET", administration_id).await?;
             unreachable!();
         }
@@ -220,9 +221,9 @@ pub(crate) async fn get_all_projects(
             .collect()),
         Err(err) => {
             let endpoint = "projects.json";
-            let context = format!(
-                "Failed to get projects for administration {}",
-                administration_id
+            let context = t!(
+                "api_failed_get_all_projects",
+                administration_id = administration_id
             );
             handle_moneybird_error(err, &context, endpoint, "GET", administration_id).await?;
             unreachable!();
@@ -245,7 +246,7 @@ pub(crate) async fn get_project_by_id(
         Ok(response) => Ok(response.into_inner().into()),
         Err(err) => {
             let endpoint = format!("projects/{}.json", project_id);
-            let context = format!("Failed to get project {}", project_id);
+            let context = t!("api_failed_get_project", project_id = project_id).to_string();
             handle_moneybird_error(err, &context, &endpoint, "GET", administration_id).await?;
             unreachable!();
         }
@@ -282,9 +283,10 @@ pub(crate) async fn get_time_entries_by_date_range(
         }
         Err(err) => {
             let endpoint = format!("time_entries.json?filter={}", filter);
-            let context = format!(
-                "Failed to get time entries for date range {}-{}",
-                start_date, end_date
+            let context = t!(
+                "api_failed_get_time_entries_date_range",
+                start_date = start_date,
+                end_date = end_date
             );
             handle_moneybird_error(err, &context, &endpoint, "GET", administration_id).await?;
             unreachable!();
@@ -305,31 +307,27 @@ pub(crate) async fn check_connectivity(client: &moneybird::Client) -> Result<(),
                 || err_msg.contains("network")
                 || err_msg.contains("tcp connect error")
             {
-                return Err(
-                    "Network connection error. Please check your internet connection.".to_string(),
-                );
+                return Err(t!("api_connection_error_network").to_string());
             }
 
             if err_msg.contains("timeout") {
-                return Err(
-                    "Connection timed out. The server took too long to respond.".to_string()
-                );
+                return Err(t!("api_connection_error_timeout").to_string());
             }
 
             if err_msg.contains("401") || err_msg.contains("403") {
-                return Err("Authentication error. Please check your API token.".to_string());
+                return Err(t!("api_connection_error_auth").to_string());
             }
 
             if err_msg.contains("404") {
-                return Err("Resource not found. Please check your configuration.".to_string());
+                return Err(t!("api_connection_error_not_found").to_string());
             }
 
             if err_msg.contains("5") && (err_msg.contains("status") || err_msg.contains("code")) {
-                return Err("MoneyBird server error. Please try again later.".to_string());
+                return Err(t!("api_connection_error_server").to_string());
             }
 
             // Generic error if we can't determine the specific cause
-            Err(format!("API connection error: {}", err))
+            Err(t!("api_connection_error_generic", error = err).to_string())
         }
     }
 }
@@ -343,7 +341,7 @@ pub(crate) fn log_debug_curl(model: &mut AppModel, endpoint: &str, method: &str)
     let curl_cmd = generate_debug_curl(endpoint, method, &admin_id, token);
 
     // Log to the application logs
-    model.log_debug(format!("Debug API call with: {}", curl_cmd));
+    model.log_debug(format!("{}", t!("api_debug_curl_command", curl = curl_cmd)));
 }
 
 /// Helper function to fetch time entries for the current date range
@@ -369,8 +367,11 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
         Ok(filter) => filter,
         Err(err) => {
             // If we couldn't create a filter, show an error
-            crate::ui::show_error(model, format!("Failed to create date filter: {}", err));
-            model.log_error(format!("Failed to create date filter: {}", err));
+            crate::ui::show_error(
+                model,
+                t!("api_failed_create_date_filter", error = err).to_string(),
+            );
+            model.log_error(t!("api_failed_create_date_filter", error = err).to_string());
             return;
         }
     };
@@ -430,22 +431,25 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                 model.time_entry_table_state.select(None);
             }
 
-            model.log_success(format!(
-                "Fetched {} time entries for the selected week.",
-                entries.len()
+            model.log_success(t!(
+                "api_success_fetched_time_entries",
+                count = entries.len()
             ));
             for entry in &entries {
-                model.log_success(format!(
-                    "Entry: {:?} {:?}",
-                    entry.id.clone().unwrap_or_default(),
-                    entry.started_at.clone().unwrap_or_default()
+                model.log_success(t!(
+                    "api_log_entry_info",
+                    id = entry.id.clone().unwrap_or_default(),
+                    date = entry.started_at.clone().unwrap_or_default()
                 ));
             }
         }
         Err(err) => {
             // If we couldn't fetch entries, clear the list and show error
-            crate::ui::show_error(model, format!("Failed to fetch time entries: {}", err));
-            model.log_error(format!("Failed to fetch time entries: {}", err));
+            crate::ui::show_error(
+                model,
+                t!("api_failed_fetch_time_entries", error = err).to_string(),
+            );
+            model.log_error(t!("api_failed_fetch_time_entries", error = err).to_string());
             model.time_entries = Vec::new();
             model.time_entries_for_table = Vec::new();
             model.time_entries_for_table_backup = Vec::new();
@@ -495,7 +499,11 @@ pub(crate) async fn delete_time_entry_by_id(
         }
         Err(err) => {
             let endpoint = format!("time_entries/{}.json", time_entry_id);
-            let context = format!("Failed to delete time entry {}", time_entry_id);
+            let context = t!(
+                "api_failed_delete_time_entry",
+                time_entry_id = time_entry_id
+            )
+            .to_string();
             handle_moneybird_error(err, &context, &endpoint, "DELETE", administration_id).await?;
             unreachable!();
         }
@@ -530,7 +538,7 @@ pub(crate) async fn create_time_entry(
         Ok(response) => Ok(response.into_inner().into()),
         Err(err) => {
             let endpoint = "time_entries.json".to_string();
-            let context = "Failed to create time entry".to_string();
+            let context = t!("api_failed_create_time_entry").to_string();
             handle_moneybird_error(err, &context, &endpoint, "POST", administration_id).await?;
             unreachable!();
         }
@@ -552,7 +560,8 @@ pub(crate) async fn get_time_entry_by_id(
         Ok(response) => Ok(response.into_inner().into()),
         Err(err) => {
             let endpoint = format!("time_entries/{}.json", time_entry_id);
-            let context = format!("Failed to get time entry {}", time_entry_id);
+            let context =
+                t!("api_failed_get_time_entry", time_entry_id = time_entry_id).to_string();
             handle_moneybird_error(err, &context, &endpoint, "GET", administration_id).await?;
             unreachable!();
         }
@@ -596,7 +605,11 @@ pub(crate) async fn update_time_entry_by_id(
         Ok(response) => Ok(response.into_inner().into()),
         Err(err) => {
             let endpoint = format!("time_entries/{}.json", time_entry_id);
-            let context = format!("Failed to update time entry {}", time_entry_id);
+            let context = t!(
+                "api_failed_update_time_entry",
+                time_entry_id = time_entry_id
+            )
+            .to_string();
 
             // For PATCH requests, we want to provide a more helpful error message with
             // sample payload data structure
@@ -627,29 +640,33 @@ pub(crate) async fn handle_moneybird_error<T: std::fmt::Debug>(
     let curl_cmd = generate_debug_curl(endpoint, method, administration_id, token);
 
     // Log the curl command for debugging
-    eprintln!("Debug with: {}", curl_cmd);
+    eprintln!("{}", t!("api_debug_with_curl", curl = curl_cmd));
 
     // Extract the response body if it's an UnexpectedResponse error
     if let moneybird::Error::UnexpectedResponse(response) = err {
-        let context = format!("{}. Debug with:\n{}", context, curl_cmd);
+        let context = t!(
+            "api_debug_call_context",
+            context = context,
+            curl_cmd = curl_cmd
+        );
         handle_api_error(response, &context).await?;
         unreachable!();
     } else if let moneybird::Error::ErrorResponse(response_value) = err {
         let status = response_value.status();
-        let error_message = format!("API error: {}", status);
-        return Err(color_eyre::eyre::eyre!(
-            "{}: {}. Debug with:\n{}",
-            context,
-            error_message,
-            curl_cmd
-        ));
+        let error_message = t!("api_error_generic", status = status);
+        return Err(color_eyre::eyre::eyre!(t!(
+            "api_debug_error_context",
+            context = context,
+            error = error_message,
+            curl = curl_cmd
+        )));
     } else {
-        return Err(color_eyre::eyre::eyre!(
-            "{}: {}. Debug with:\n{}",
-            context,
-            err,
-            curl_cmd
-        ));
+        return Err(color_eyre::eyre::eyre!(t!(
+            "api_debug_error_context",
+            context = context,
+            error = err,
+            curl = curl_cmd
+        )));
     }
 }
 
@@ -664,7 +681,10 @@ pub(crate) fn format_date_for_moneybird(date_str: &str) -> Result<String> {
 
     // Check if we have enough characters to slice (at least YYYYMMDD)
     if formatted.len() < 8 {
-        return Err(color_eyre::eyre::eyre!("Invalid date format: {}", date_str));
+        return Err(color_eyre::eyre::eyre!(t!(
+            "api_invalid_date_format",
+            date = date_str
+        )));
     }
 
     // Take only the date part (first 8 chars of formatted string - YYYYMMDD)
@@ -696,9 +716,9 @@ pub(crate) async fn get_all_users(
         Ok(response) => Ok(response.into_inner().into_iter().collect()),
         Err(err) => {
             let endpoint = "users.json";
-            let context = format!(
-                "Failed to get users for administration {}",
-                administration_id
+            let context = t!(
+                "api_failed_get_users",
+                administration_id = administration_id
             );
             handle_moneybird_error(err, &context, endpoint, "GET", administration_id).await?;
             unreachable!();

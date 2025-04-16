@@ -1,4 +1,5 @@
 use crate::{datetime, AppModel};
+use rust_i18n::t;
 use std::fs::File;
 use std::io::Write;
 
@@ -8,7 +9,7 @@ pub async fn handle_export_command(
     week_arg: String,
     query_arg: String,
 ) -> color_eyre::Result<()> {
-    println!("Exporting time entries for week: {}", week_arg);
+    println!("{}", t!("file_exporting_time_entries", week = week_arg));
 
     // Get administration timezone, default to UTC if not set
     let admin_timezone_str = model
@@ -35,19 +36,19 @@ pub async fn handle_export_command(
     }
 
     // Fetch time entries for the specified week
-    println!("Fetching time entries for week {}...", target_week);
+    println!("{}", t!("file_fetching_time_entries", week = target_week));
     crate::api::get_time_entries(model).await;
 
     // Generate the filename with week number and date range
     let filename = generate_export_filename(model, Some(target_week));
-    println!("Exporting to file: {}", filename);
+    println!("{}", t!("file_exporting_to_file", filename = filename));
 
     // Apply filter if query is provided
     let original_entries = model.time_entries_for_table.clone();
     let mut filtered = false;
 
     if !query_arg.is_empty() {
-        println!("Filtering with query: {}", query_arg);
+        println!("{}", t!("file_filtering_with_query", query = query_arg));
 
         // Set up the search state with the query
         model.search_state.active = true;
@@ -69,15 +70,21 @@ pub async fn handle_export_command(
     match result {
         Ok(()) => {
             println!(
-                "Successfully exported {} time entries to {}",
-                model.time_entries_for_table.len(),
-                filename
+                "{}",
+                t!(
+                    "file_export_success",
+                    count = model.time_entries_for_table.len(),
+                    filename = filename
+                )
             );
             Ok(())
         }
         Err(err) => {
-            eprintln!("Error exporting time entries: {}", err);
-            Err(color_eyre::eyre::eyre!("Export failed: {}", err))
+            eprintln!("{}", t!("file_export_error", error = err));
+            Err(color_eyre::eyre::eyre!(t!(
+                "file_export_failed",
+                error = err
+            )))
         }
     }
 }
@@ -90,13 +97,13 @@ pub fn export_time_entries_to_csv(
     // Create a new file
     let mut file = match File::create(filename) {
         Ok(file) => file,
-        Err(e) => return Err(format!("Could not create file: {}", e)),
+        Err(e) => return Err(t!("file_create_error", error = e).to_string()),
     };
 
     // Write CSV header
     match file.write_all(b"Date,Start Time,End Time,Duration,Client,Project,Description\n") {
         Ok(_) => (),
-        Err(e) => return Err(format!("Could not write header: {}", e)),
+        Err(e) => return Err(t!("file_write_header_error", error = e).to_string()),
     }
 
     // Write CSV data for each time entry
@@ -133,7 +140,7 @@ pub fn export_time_entries_to_csv(
 
         // Write the line to the file
         if let Err(e) = file.write_all(line.as_bytes()) {
-            return Err(format!("Could not write data: {}", e));
+            return Err(t!("file_write_data_error", error = e).to_string());
         }
     }
 

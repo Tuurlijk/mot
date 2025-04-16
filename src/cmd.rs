@@ -1,19 +1,24 @@
 use clap::Parser;
+use rust_i18n::t;
 
 #[derive(Parser)]
 #[clap(version, about = about_str())]
 pub(crate) struct Args {
     /// Export time entries to a csv file
-    #[clap(short = 'e', long, action = clap::ArgAction::SetTrue)]
+    #[clap(short = 'e', long, action = clap::ArgAction::SetTrue, help = t!("cmd_export_help"))]
     pub(crate) export: bool,
 
     /// Week number to export
-    #[clap(short = 'w', long, default_value = "current week")]
+    #[clap(short = 'w', long, default_value = "current week", help = t!("cmd_week_help"))]
     pub(crate) week: String,
 
     /// Filter query
-    #[clap(short = 'q', long, default_value = "")]
+    #[clap(short = 'q', long, default_value = "", help = t!("cmd_query_help"))]
     pub(crate) query: String,
+
+    /// Set the display language (e.g., en, nl)
+    #[clap(short = 'l', long, help = t!("cmd_language_help"))]
+    pub(crate) language: Option<String>,
 }
 
 fn about_str() -> &'static str {
@@ -23,15 +28,17 @@ fn about_str() -> &'static str {
     // Build the about string with the dynamic value
     let about_str = format!(
         r"
-     __  __                   _    _        _ 
-    |  \/  |___ _ _  ___ _  _| |__(_)_ _ __| |
-    | |\/| / _ \ ' \/ -_) || | '_ \ | '_/ _` |
-    |_|  |_\___/_||_\___|\_, |_.__/_|_| \__,_|
-                        |__/   
-    Moneybird Terminal User Interface
-    Coded with ♥️ by Michiel Roos
-    {}
-",
+      __  __                   _    _        _ 
+     |  \/  |___ _ _  ___ _  _| |__(_)_ _ __| |
+     | |\/| / _ \ ' \/ -_) || | '_ \ | '_/ _` |
+     |_|  |_\___/_||_\___|\_, |_.__/_|_| \__,_|
+                         |__/   
+     {}
+     {}
+     {}
+ ",
+        t!("cmd_app_title"),
+        t!("cmd_app_credits"),
         dynamic_value
     );
 

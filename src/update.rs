@@ -1,5 +1,6 @@
 use crossterm::event::KeyCode;
 use ratatui::style::Style;
+use rust_i18n::t;
 use tui_textarea::TextArea;
 
 use crate::{
@@ -136,7 +137,7 @@ fn handle_autocomplete_select_project(model: &mut AppModel) {
         autocomplete_state.mark_searched(); // Prevent re-search
         autocomplete_state.is_dropdown_visible = false;
         autocomplete_state.items.clear();
-        model.log_notice(format!("Selected project: {}", project_name));
+        model.log_notice(t!("update_selected_project", project_name = project_name));
     }
 }
 
@@ -156,7 +157,7 @@ fn handle_autocomplete_select_contact(model: &mut AppModel) {
         autocomplete_state.mark_searched(); // Prevent re-search
         autocomplete_state.is_dropdown_visible = false;
         autocomplete_state.items.clear();
-        model.log_notice(format!("Selected contact: {}", contact_name));
+        model.log_notice(t!("update_selected_contact", contact_name = contact_name));
     }
 }
 
@@ -172,9 +173,8 @@ async fn handle_autocomplete_refresh_project(model: &mut AppModel) {
             query
         ));
     } else {
-        // No need to mark loading for local filter
         model.edit_state.project_autocomplete.mark_searched();
-        model.log_debug(format!("Filtering local projects for query: '{}'", query));
+        model.log_debug(t!("update_filtering_local_projects", query = query));
 
         let filtered_projects = model
             .projects
@@ -231,8 +231,10 @@ async fn handle_autocomplete_refresh_contact(model: &mut AppModel) {
                 ));
             }
             Err(err) => {
-                ui::show_error(model, format!("API search for contacts failed: {}", err));
-                model.log_error(format!("API search for contacts failed: {}", err));
+                let error_msg =
+                    t!("update_api_search_contacts_failed", error = err.to_string()).to_string();
+                ui::show_error(model, error_msg.clone());
+                model.log_error(error_msg);
                 model.edit_state.contact_autocomplete.update_items(vec![]);
             }
         }
@@ -242,28 +244,30 @@ async fn handle_autocomplete_refresh_contact(model: &mut AppModel) {
 
 // Helper function to handle exporting time entries to CSV
 fn handle_export(model: &mut AppModel) {
-    // Check moved here from Message::Export for consistency
     if model.time_entries_for_table.is_empty() {
-        ui::show_error(model, "No time entries to export.".to_string());
+        ui::show_error(model, t!("no_time_entries_to_export").to_string());
         return;
     }
 
     let filename = file::generate_export_filename(model, None);
-    model.log_debug("Starting export operation...");
+    model.log_debug(t!("update_log_starting_export").to_string());
 
     match file::export_time_entries_to_csv(model, &filename) {
         Ok(()) => {
-            model.log_debug("Export successful, showing success modal directly");
+            model.log_debug(t!("update_log_export_success_modal").to_string());
             ui::show_info(
                 model,
                 "export_success",
-                "Export Successful".to_string(),
-                format!("Time entries exported to: {}", filename),
+                t!("export_success").to_string(),
+                t!("update_export_success", filename = filename).to_string(),
             );
         }
         Err(err) => {
             model.log_error(format!("Export failed: {}", err));
-            ui::show_error(model, format!("Failed to export: {}", err));
+            ui::show_error(
+                model,
+                t!("update_failed_to_export", error = err.to_string()),
+            );
         }
     }
 }
@@ -327,7 +331,6 @@ fn handle_modal_close(
 
 /// Process a message and update the model state
 pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message> {
-    // Process the regular message
     match msg {
         Message::Quit => {
             model.running_state = RunningState::Done;
@@ -354,14 +357,14 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
 
         Message::TimeEntryCurrentWeek => {
             model.week_offset = 0;
-            model.log_notice("Navigating to current week");
+            model.log_notice(t!("update_log_navigating_current_week").to_string());
             Some(Message::TimeEntryRefresh)
         }
 
         Message::TimeEntryRefresh => {
-            model.log_notice("Manually refreshing time entries");
+            model.log_notice(t!("update_log_manual_refresh").to_string());
             get_time_entries(model).await;
-            model.log_success("The time entries have been refreshed.");
+            model.log_success(t!("update_time_entries_refreshed").to_string());
             None
         }
 
@@ -406,14 +409,13 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if !model.time_entries_for_table.is_empty() {
                 ui::show_confirmation(
                     model,
-                    "Export".to_string(),
-                    "Do you want to export the selected time entries to CSV?".to_string(),
+                    t!("export").to_string(),
+                    t!("do_you_want_to_export_the_selected_time_entries_to_csv").to_string(),
                     Some(Message::ExecuteExport),
                     None,
                 );
             } else {
-                // Show error directly if empty, consistent with handle_export check
-                ui::show_error(model, "No time entries to export.".to_string());
+                ui::show_error(model, t!("no_time_entries_to_export").to_string());
             }
             None
         }
@@ -421,29 +423,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         Message::ConfirmModal(modal_id) => handle_modal_close(model, modal_id, true),
 
         Message::DismissModal(modal_id, is_cancel) => {
-            // Pass !is_cancel as the `is_confirm` flag equivalent
-            // Since DismissModal uses on_cancel only when is_cancel is true
-            if is_cancel {
-                handle_modal_close(model, modal_id, false)
-            } else {
-                // If not cancelling, just pop without triggering on_cancel
-                if !model.modal_stack.is_empty() {
-                    let modal_info = model
-                        .modal_stack
-                        .top()
-                        .map(|modal| modal.id.clone().unwrap_or_default());
-                    if let Some(current_modal_id) = modal_info {
-                        if modal_id.is_empty() || modal_id == current_modal_id {
-                            model.modal_stack.pop();
-                            if model.modal_stack.is_empty() {
-                                model.appearance.default_style = Style::default()
-                                    .fg(model.appearance.default_foreground_color_indexed);
-                            }
-                        }
-                    }
-                }
-                None // No further action needed
-            }
+            handle_modal_close(model, modal_id, !is_cancel)
         }
 
         Message::TimeEntryClearSearch => {
@@ -462,47 +442,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
-        Message::EditTimeEntryKeyPress(key) => {
-            if model.edit_state.active {
-                // Simply apply the input to our single editor
-                model.edit_state.editor.input(key);
-
-                // Update the current field's value based on the editor content
-                match model.edit_state.selected_field {
-                    crate::model::EditField::Description => {
-                        // For description, join all lines with newlines
-                        let lines = model.edit_state.editor.lines();
-                        if !lines.is_empty() {
-                            model.edit_state.description = lines.join("\n");
-                        }
-                    }
-                    crate::model::EditField::StartDate => {
-                        // For other fields, just take the first line
-                        if let Some(line) = model.edit_state.editor.lines().first() {
-                            model.edit_state.start_date = line.clone();
-                        }
-                    }
-                    crate::model::EditField::StartTime => {
-                        if let Some(line) = model.edit_state.editor.lines().first() {
-                            model.edit_state.start_time = line.clone();
-                        }
-                    }
-                    crate::model::EditField::EndDate => {
-                        if let Some(line) = model.edit_state.editor.lines().first() {
-                            model.edit_state.end_date = line.clone();
-                        }
-                    }
-                    crate::model::EditField::EndTime => {
-                        if let Some(line) = model.edit_state.editor.lines().first() {
-                            model.edit_state.end_time = line.clone();
-                        }
-                    }
-                    _ => {} // Other fields don't use the editor
-                }
-            }
-            None
-        }
-
         Message::EditTimeEntry => {
             if let Some(selected_idx) = model.time_entry_table_state.selected() {
                 if selected_idx < model.time_entries_for_table.len() {
@@ -511,68 +450,64 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                         .time_entries
                         .iter()
                         .find(|e| e.id.clone().unwrap_or_default() == selected_entry.id)
-                        .unwrap(); // Consider handling unwrap more gracefully
+                        .cloned();
 
-                    // Get administration timezone
-                    let admin_timezone_str = model
-                        .administration
-                        .time_zone
-                        .clone()
-                        .unwrap_or_else(|| "UTC".to_string());
-
-                    // Parse start and end dates/times using admin timezone
-                    let start_datetime = datetime::parse_iso_datetime(
-                        &selected_entry.started_at,
-                        &admin_timezone_str,
-                    );
-                    let end_datetime =
-                        datetime::parse_iso_datetime(&selected_entry.ended_at, &admin_timezone_str);
-
-                    if let (Some(start), Some(end)) = (start_datetime, end_datetime) {
-                        // Initialize the edit state
-                        model.edit_state.active = true;
-                        model.edit_state.entry_id = selected_entry.id.clone();
-
-                        // Format dates and times as strings for display/editing
-                        let start_date_str = start.format("%Y-%m-%d").to_string();
-                        let start_time_str = start.format("%H:%M").to_string();
-                        let end_date_str = end.format("%Y-%m-%d").to_string();
-                        let end_time_str = end.format("%H:%M").to_string();
-
-                        // Set string values
-                        model.edit_state.description = selected_entry.description.clone();
-                        model.edit_state.start_date = start_date_str;
-                        model.edit_state.start_time = start_time_str;
-                        model.edit_state.end_date = end_date_str;
-                        model.edit_state.end_time = end_time_str;
-
-                        // Set project and contact IDs
-                        model.edit_state.project_id = original_entry.project_id.clone();
-                        model.edit_state.project_name = original_entry
-                            .project
+                    if let Some(orig_entry) = original_entry {
+                        let admin_timezone_str = model
+                            .administration
+                            .time_zone
                             .clone()
-                            .unwrap_or_default()
-                            .name
-                            .clone();
-                        model.edit_state.contact_id = original_entry.contact_id.clone();
-                        model.edit_state.contact_name = original_entry
-                            .contact
-                            .clone()
-                            .unwrap_or_default()
-                            .company_name
-                            .clone();
+                            .unwrap_or_else(|| "UTC".to_string());
+                        let start_datetime = datetime::parse_iso_datetime(
+                            &selected_entry.started_at,
+                            &admin_timezone_str,
+                        );
+                        let end_datetime = datetime::parse_iso_datetime(
+                            &selected_entry.ended_at,
+                            &admin_timezone_str,
+                        );
 
-                        // Initialize the shared editor with the description
-                        let mut editor = TextArea::default();
-                        editor.insert_str(&selected_entry.description);
-                        model.edit_state.editor = editor;
+                        if let (Some(start), Some(end)) = (start_datetime, end_datetime) {
+                            model.edit_state.active = true;
+                            model.edit_state.entry_id = selected_entry.id.clone();
 
-                        // Start with description field
-                        model.edit_state.selected_field = crate::model::EditField::Description;
+                            let start_date_str = start.format("%Y-%m-%d").to_string();
+                            let start_time_str = start.format("%H:%M").to_string();
+                            let end_date_str = end.format("%Y-%m-%d").to_string();
+                            let end_time_str = end.format("%H:%M").to_string();
 
-                        model.log_notice(format!("Editing time entry: {}", selected_entry.id));
+                            model.edit_state.description = selected_entry.description.clone();
+                            model.edit_state.start_date = start_date_str;
+                            model.edit_state.start_time = start_time_str;
+                            model.edit_state.end_date = end_date_str;
+                            model.edit_state.end_time = end_time_str;
+
+                            model.edit_state.project_id = orig_entry.project_id.clone();
+                            model.edit_state.project_name =
+                                orig_entry.project.clone().unwrap_or_default().name.clone();
+                            model.edit_state.contact_id = orig_entry.contact_id.clone();
+                            model.edit_state.contact_name = orig_entry
+                                .contact
+                                .clone()
+                                .unwrap_or_default()
+                                .company_name
+                                .clone();
+
+                            model.edit_state.editor = TextArea::default();
+                            model
+                                .edit_state
+                                .editor
+                                .insert_str(&model.edit_state.description);
+                            model.edit_state.selected_field = crate::model::EditField::Description;
+                            model.log_notice(t!(
+                                "update_editing_time_entry",
+                                entry_id = selected_entry.id.clone()
+                            ));
+                        } else {
+                            model.log_error(t!("failed_to_parse_time_entry_dates").to_string());
+                        }
                     } else {
-                        model.log_error("Failed to parse time entry dates.");
+                        model.log_error(t!("could_not_find_original_entry").to_string());
                     }
                 }
             }
@@ -582,90 +517,77 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         Message::EditTimeEntryCancel => {
             if model.edit_state.active {
                 model.edit_state.active = false;
-                model.log_notice("Canceled editing time entry");
+                model.log_notice(t!("canceled_editing").to_string());
             }
             None
         }
 
         Message::EditTimeEntrySave => {
             if model.edit_state.active {
-                // Update current field before saving
                 update_edit_field_from_editor(&mut model.edit_state);
 
-                // Generate a TimeEntry from the EditState
-                // Note: try_into_time_entry currently sets the ID from edit_state.entry_id
-                // For creation, the ID should be None or ignored by the API wrapper.
-                // Let's check how crate::moneybird::types::TimeEntryCreate handles it.
-                // It seems `create_time_entry` takes a TimeEntry and builds TimeEntryCreate internally,
-                // ignoring the input ID. So this is fine.
-                let time_entry_data = model.edit_state.try_into_time_entry(
-                    &model
-                        .administration
-                        .time_zone
-                        .clone()
-                        .unwrap_or_else(|| "UTC".to_string()),
-                );
+                let admin_timezone_str = model
+                    .administration
+                    .time_zone
+                    .clone()
+                    .unwrap_or_else(|| "UTC".to_string());
+                let time_entry_data = model.edit_state.try_into_time_entry(&admin_timezone_str);
 
                 let is_creating = model.edit_state.entry_id.is_empty();
                 let admin_id = model.administration.id.clone().unwrap_or_default();
-                let client = model.client.clone(); // Clone client for async operation
+                let client = model.client.clone();
+                let user_id = model.config.user_id.clone().unwrap_or_default();
 
                 if is_creating {
-                    // --- CREATE NEW ENTRY ---
                     model.log_notice(format!(
                         "Creating new time entry: {}",
                         model.edit_state.description
                     ));
-
-                    // Log a curl command for debugging purposes
                     let endpoint = "time_entries.json";
                     crate::api::log_debug_curl(model, endpoint, "POST");
 
-                    // Create time entry
                     match crate::api::create_time_entry(
                         &client,
                         &admin_id,
-                        &model.config.user_id.clone().unwrap_or_default(),
-                        time_entry_data, // Pass the generated data
+                        &user_id,
+                        time_entry_data,
                     )
                     .await
                     {
                         Ok(created_entry) => {
-                            model.log_success(format!(
-                                "Time entry created successfully: {}",
-                                created_entry.id.clone().unwrap_or_default()
-                            ));
+                            model.log_success(
+                                t!(
+                                    "time_entry_created_successfully",
+                                    id = created_entry.id.clone().unwrap_or_default()
+                                )
+                                .to_string(),
+                            );
                             ui::show_info(
                                 model,
                                 "create_success",
-                                "Success".to_string(),
-                                "Time entry was created successfully.".to_string(),
+                                t!("success").to_string(),
+                                t!("time_entry_was_created_successfully").to_string(),
                             );
-                            // Refresh the list to show the new entry
                             get_time_entries(model).await;
                         }
                         Err(err) => {
-                            // Failure - show error with details
-                            model.log_error(format!("Failed to create time entry: {}", err));
-                            crate::ui::show_error(
-                                model,
-                                format!("Failed to create time entry: {}", err),
-                            );
+                            let error_msg =
+                                t!("update_failed_create_time_entry", error = err.to_string())
+                                    .to_string();
+                            model.log_error(error_msg.clone());
+                            crate::ui::show_error(model, error_msg);
                         }
                     }
                 } else {
-                    // --- UPDATE EXISTING ENTRY ---
                     let entry_id = model.edit_state.entry_id.clone();
-                    model.log_notice(format!(
-                        "Updating time entry: {} - {}",
-                        entry_id, model.edit_state.description
+                    model.log_notice(t!(
+                        "updating_time_entry_notice",
+                        entry_id = entry_id.clone(),
+                        description = model.edit_state.description.clone()
                     ));
-
-                    // Log a curl command for debugging purposes
                     let endpoint = format!("time_entries/{}.json", entry_id);
                     crate::api::log_debug_curl(model, &endpoint, "PATCH");
 
-                    // Update time entry
                     match crate::api::update_time_entry_by_id(
                         &client,
                         &admin_id,
@@ -675,14 +597,11 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     .await
                     {
                         Ok(updated_entry) => {
-                            // Success - update the local state
                             if let Some(index) = model
                                 .time_entries
                                 .iter()
                                 .position(|entry| entry.id == Some(entry_id.clone()))
-                            // Use cloned entry_id
                             {
-                                // Find the corresponding index in the potentially filtered table view
                                 if let Some(table_index) = model
                                     .time_entries_for_table
                                     .iter()
@@ -719,7 +638,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                             .unwrap_or_default(),
                                         billable: updated_entry.billable.unwrap_or_default(),
                                     };
-                                    // Update backup as well
                                     if let Some(backup_index) = model
                                         .time_entries_for_table_backup
                                         .iter()
@@ -730,30 +648,26 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                     }
                                 }
                             }
-                            model.log_success(format!(
-                                "Time entry updated successfully: {}",
-                                entry_id // Use entry_id here
+                            model.log_success(t!(
+                                "time_entry_updated_successfully",
+                                id = entry_id.clone()
                             ));
                             ui::show_info(
                                 model,
                                 "update_success",
-                                "Success".to_string(),
-                                "Time entry was updated successfully.".to_string(),
+                                t!("success").to_string(),
+                                t!("time_entry_was_updated_successfully").to_string(),
                             );
-                            // No automatic refresh needed on update, just local state change
                         }
                         Err(err) => {
-                            // Failure - show error with details
-                            model.log_error(format!("Failed to update time entry: {}", err));
-                            crate::ui::show_error(
-                                model,
-                                format!("Failed to update time entry: {}", err),
-                            );
+                            let error_msg =
+                                t!("update_failed_update_time_entry", error = err.to_string())
+                                    .to_string();
+                            model.log_error(error_msg.clone());
+                            crate::ui::show_error(model, error_msg);
                         }
                     }
                 }
-
-                // Reset edit state regardless of success or failure
                 model.edit_state = EditState::default();
             }
             None
@@ -761,39 +675,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
 
         Message::EditTimeEntryNextField => {
             if model.edit_state.active {
-                // Define the field order
-                const FIELD_ORDER: &[crate::model::EditField] = &[
-                    crate::model::EditField::Description,
-                    crate::model::EditField::Contact,
-                    crate::model::EditField::Project,
-                    crate::model::EditField::StartTime, // Adjusted order based on user's last change
-                    crate::model::EditField::EndTime,
-                    crate::model::EditField::StartDate,
-                    crate::model::EditField::EndDate,
-                ];
-
-                // Update the current field's value from the editor before switching
-                update_edit_field_from_editor(&mut model.edit_state);
-
-                // Find current index
-                if let Some(current_index) = FIELD_ORDER
-                    .iter()
-                    .position(|&field| field == model.edit_state.selected_field)
-                {
-                    // Calculate next index with wrap around
-                    let next_index = (current_index + 1) % FIELD_ORDER.len();
-                    model.edit_state.selected_field = FIELD_ORDER[next_index];
-
-                    // Update editor content for the new field
-                    initialize_editor_or_autocomplete(&mut model.edit_state);
-                }
-            }
-            None
-        }
-
-        Message::EditTimeEntryPreviousField => {
-            if model.edit_state.active {
-                // Define the field order (same as above for consistency)
                 const FIELD_ORDER: &[crate::model::EditField] = &[
                     crate::model::EditField::Description,
                     crate::model::EditField::Contact,
@@ -803,24 +684,41 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     crate::model::EditField::StartDate,
                     crate::model::EditField::EndDate,
                 ];
-
-                // Update the current field's value from the editor before switching
                 update_edit_field_from_editor(&mut model.edit_state);
-
-                // Find current index
                 if let Some(current_index) = FIELD_ORDER
                     .iter()
                     .position(|&field| field == model.edit_state.selected_field)
                 {
-                    // Calculate previous index with wrap around
+                    let next_index = (current_index + 1) % FIELD_ORDER.len();
+                    model.edit_state.selected_field = FIELD_ORDER[next_index];
+                    initialize_editor_or_autocomplete(&mut model.edit_state);
+                }
+            }
+            None
+        }
+
+        Message::EditTimeEntryPreviousField => {
+            if model.edit_state.active {
+                const FIELD_ORDER: &[crate::model::EditField] = &[
+                    crate::model::EditField::Description,
+                    crate::model::EditField::Contact,
+                    crate::model::EditField::Project,
+                    crate::model::EditField::StartTime,
+                    crate::model::EditField::EndTime,
+                    crate::model::EditField::StartDate,
+                    crate::model::EditField::EndDate,
+                ];
+                update_edit_field_from_editor(&mut model.edit_state);
+                if let Some(current_index) = FIELD_ORDER
+                    .iter()
+                    .position(|&field| field == model.edit_state.selected_field)
+                {
                     let prev_index = if current_index == 0 {
                         FIELD_ORDER.len() - 1
                     } else {
                         current_index - 1
                     };
                     model.edit_state.selected_field = FIELD_ORDER[prev_index];
-
-                    // Update editor content for the new field
                     initialize_editor_or_autocomplete(&mut model.edit_state);
                 }
             }
@@ -837,9 +735,10 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
 
                     ui::show_confirmation(
                         model,
-                        "Delete Time Entry".to_string(),
+                        t!("delete_time_entry").to_string(),
                         format!(
-                            "Are you sure you want to delete the time entry:\n\"{}\"?",
+                            "{}\n\"{}\"?",
+                            t!("confirm_delete_prompt"),
                             entry_description
                         ),
                         Some(Message::ExecuteDeleteTimeEntry(entry_id)),
@@ -856,32 +755,33 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         }
 
         Message::ExecuteDeleteTimeEntry(entry_id) => {
-            model.log_notice(format!("Deleting time entry: {}", entry_id));
+            model.log_notice(t!(
+                "update_deleting_time_entry",
+                entry_id = entry_id.clone()
+            ));
 
             let admin_id = model.administration.id.clone().unwrap_or_default();
             let client = model.client.clone();
 
-            // Call API to delete the time entry
             let delete_result =
                 crate::api::delete_time_entry_by_id(&client, &admin_id, &entry_id).await;
 
             match delete_result {
                 Ok(_) => {
-                    model.log_success(format!("Time entry deleted successfully: {}", entry_id));
+                    model.log_success(t!("update_time_entry_deleted", entry_id = entry_id.clone()));
                     ui::show_info(
                         model,
                         "delete_success",
-                        "Success".to_string(),
-                        "Time entry was deleted successfully.".to_string(),
+                        t!("success").to_string(),
+                        t!("time_entry_was_deleted_successfully").to_string(),
                     );
-
-                    // Refresh time entries directly
-                    model.log_notice("Refreshing time entries after delete");
                     get_time_entries(model).await;
                 }
                 Err(err) => {
-                    model.log_error(format!("Failed to delete time entry: {}", err));
-                    ui::show_error(model, format!("Failed to delete time entry: {}", err));
+                    let error_msg =
+                        t!("update_failed_delete_time_entry", error = err.to_string()).to_string();
+                    model.log_error(error_msg.clone());
+                    ui::show_error(model, error_msg);
                 }
             }
             None
@@ -891,8 +791,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if model.edit_state.active
                 && model.edit_state.selected_field == crate::model::EditField::Project
             {
-                // TODO: Show project selection modal
-                model.log_notice("Project selection not yet implemented");
+                model.log_notice(t!("update_log_project_select_nyi").to_string());
             }
             None
         }
@@ -901,21 +800,18 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if model.edit_state.active
                 && model.edit_state.selected_field == crate::model::EditField::Contact
             {
-                // TODO: Show contact selection modal
-                model.log_notice("Contact selection not yet implemented");
+                model.log_notice(t!("update_log_contact_select_nyi").to_string());
             }
             None
         }
 
         Message::ToggleLogPanel => {
             model.log_panel_state.visible = !model.log_panel_state.visible;
-
             if model.log_panel_state.visible {
-                model.log_debug("Log panel opened");
+                model.log_debug(t!("update_log_panel_opened").to_string());
             } else {
-                model.log_debug("Log panel closed");
+                model.log_debug(t!("update_log_panel_closed").to_string());
             }
-
             None
         }
 
@@ -924,21 +820,17 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 return None;
             }
             match model.edit_state.selected_field {
-                crate::model::EditField::Project => {
-                    handle_autocomplete_keypress(
-                        &mut model.edit_state.project_autocomplete,
-                        key.code,
-                    );
-                }
-                crate::model::EditField::Contact => {
-                    handle_autocomplete_keypress(
-                        &mut model.edit_state.contact_autocomplete,
-                        key.code,
-                    );
-                }
-                _ => return None, // Not an autocomplete field
+                crate::model::EditField::Project => handle_autocomplete_keypress(
+                    &mut model.edit_state.project_autocomplete,
+                    key.code,
+                ),
+                crate::model::EditField::Contact => handle_autocomplete_keypress(
+                    &mut model.edit_state.contact_autocomplete,
+                    key.code,
+                ),
+                _ => return None,
             }
-            None
+            Some(Message::AutocompleteRefresh)
         }
 
         Message::AutocompleteSelect => {
@@ -946,12 +838,8 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 return None;
             }
             match model.edit_state.selected_field {
-                crate::model::EditField::Project => {
-                    handle_autocomplete_select_project(model);
-                }
-                crate::model::EditField::Contact => {
-                    handle_autocomplete_select_contact(model);
-                }
+                crate::model::EditField::Project => handle_autocomplete_select_project(model),
+                crate::model::EditField::Contact => handle_autocomplete_select_contact(model),
                 _ => {}
             }
             None
@@ -963,10 +851,10 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             match model.edit_state.selected_field {
                 crate::model::EditField::Project => {
-                    handle_autocomplete_refresh_project(model).await;
+                    handle_autocomplete_refresh_project(model).await
                 }
                 crate::model::EditField::Contact => {
-                    handle_autocomplete_refresh_contact(model).await;
+                    handle_autocomplete_refresh_contact(model).await
                 }
                 _ => {}
             }
@@ -979,16 +867,10 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             match model.edit_state.selected_field {
                 crate::model::EditField::Project => {
-                    handle_autocomplete_navigation(
-                        &mut model.edit_state.project_autocomplete,
-                        true,
-                    );
+                    handle_autocomplete_navigation(&mut model.edit_state.project_autocomplete, true)
                 }
                 crate::model::EditField::Contact => {
-                    handle_autocomplete_navigation(
-                        &mut model.edit_state.contact_autocomplete,
-                        true,
-                    );
+                    handle_autocomplete_navigation(&mut model.edit_state.contact_autocomplete, true)
                 }
                 _ => {}
             }
@@ -1000,18 +882,14 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 return None;
             }
             match model.edit_state.selected_field {
-                crate::model::EditField::Project => {
-                    handle_autocomplete_navigation(
-                        &mut model.edit_state.project_autocomplete,
-                        false,
-                    );
-                }
-                crate::model::EditField::Contact => {
-                    handle_autocomplete_navigation(
-                        &mut model.edit_state.contact_autocomplete,
-                        false,
-                    );
-                }
+                crate::model::EditField::Project => handle_autocomplete_navigation(
+                    &mut model.edit_state.project_autocomplete,
+                    false,
+                ),
+                crate::model::EditField::Contact => handle_autocomplete_navigation(
+                    &mut model.edit_state.contact_autocomplete,
+                    false,
+                ),
                 _ => {}
             }
             None
@@ -1033,40 +911,36 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         }
 
         Message::AutocompleteResultsProject(projects) => {
-            // Update the project autocomplete with retrieved projects
             model.edit_state.project_autocomplete.update_items(projects);
-            model.log_debug(format!(
-                "Updated project suggestions: {} items found",
-                model.edit_state.project_autocomplete.items.len()
-            ));
+            model.log_debug(
+                t!(
+                    "updated_project_suggestions",
+                    count = model.edit_state.project_autocomplete.items.len()
+                )
+                .to_string(),
+            );
             None
         }
 
         Message::AutocompleteResultsContact(contacts) => {
-            // Update the contact autocomplete with retrieved contacts
             model.edit_state.contact_autocomplete.update_items(contacts);
-            model.log_debug(format!(
-                "Updated contact suggestions: {} items found",
-                model.edit_state.contact_autocomplete.items.len()
-            ));
+            model.log_debug(
+                t!(
+                    "updated_contact_suggestions",
+                    count = model.edit_state.contact_autocomplete.items.len()
+                )
+                .to_string(),
+            );
             None
         }
 
         Message::TimeEntryCreate => {
-            model.log_notice("Initiating new time entry creation");
-
-            // Reset edit state for a new entry
-            model.edit_state = EditState::default(); // Start with default values
+            model.log_notice(t!("update_log_initiating_create").to_string());
+            model.edit_state = EditState::default();
             model.edit_state.active = true;
-            model.edit_state.entry_id = String::new(); // Ensure entry_id is empty for creation
-
-            // Initialize editor with empty description
+            model.edit_state.entry_id = String::new();
             model.edit_state.editor = TextArea::default();
-
-            // Set default field to Description
             model.edit_state.selected_field = crate::model::EditField::Description;
-
-            // Get administration timezone
             let admin_timezone_str = model
                 .administration
                 .time_zone
@@ -1075,28 +949,21 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             let admin_tz = admin_timezone_str
                 .parse::<chrono_tz::Tz>()
                 .unwrap_or(chrono_tz::UTC);
-
-            // Pre-fill dates/times with current time in the administration timezone
             let now = chrono::Utc::now().with_timezone(&admin_tz);
             model.edit_state.start_date = now.format("%Y-%m-%d").to_string();
             model.edit_state.start_time = now.format("%H:%M").to_string();
-            // Default end time to start time + 1 hour
             let end_time_default = now + chrono::Duration::hours(1);
             model.edit_state.end_date = end_time_default.format("%Y-%m-%d").to_string();
             model.edit_state.end_time = end_time_default.format("%H:%M").to_string();
-
-            // Initialize autocomplete states (already done by EditState::default)
             initialize_editor_or_autocomplete(&mut model.edit_state);
-
             None
         }
 
-        // --- User Selection Handling ---
         Message::UserSelectNext => {
             if !model.users.is_empty() {
                 let current_index = model.user_selection_state.selected().unwrap_or(0);
                 let next_index = if current_index >= model.users.len() - 1 {
-                    0 // Wrap around to the beginning
+                    0
                 } else {
                     current_index + 1
                 };
@@ -1109,7 +976,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if !model.users.is_empty() {
                 let current_index = model.user_selection_state.selected().unwrap_or(0);
                 let prev_index = if current_index == 0 {
-                    model.users.len() - 1 // Wrap around to the end
+                    model.users.len() - 1
                 } else {
                     current_index - 1
                 };
@@ -1122,56 +989,44 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             let mut selected_user_id: Option<String> = None;
             let mut log_no_id_error = false;
 
-            // --- Start of immutable borrow scope ---
             if model.user_selection_active {
                 if let Some(selected_index) = model.user_selection_state.selected() {
                     if selected_index < model.users.len() {
                         if let Some(id) = &model.users[selected_index].id {
-                            selected_user_id = Some(id.clone()); // Clone the ID while borrow is active
+                            selected_user_id = Some(id.clone());
                         } else {
-                            // Mark that we need to log an error later
                             log_no_id_error = true;
                         }
-                    } // else: selected_index out of bounds, do nothing here, handled by selected_user_id being None
-                } // else: no selection, do nothing here, handled by selected_user_id being None
+                    }
+                }
             }
-            // --- End of immutable borrow scope ---
 
-            // Now use the cloned ID (if found) or handle errors to mutate the model
             if let Some(user_id) = selected_user_id {
-                model.log_notice(format!("Selected user ID: {}", user_id));
-                model.config.user_id = Some(user_id); // Modify config field
-
-                // Attempt to save the configuration
+                model.log_notice(t!("update_selected_user_id", user_id = user_id.clone()));
+                model.config.user_id = Some(user_id.clone());
                 match config::save_configuration(&model.config) {
-                    // Pass immutable borrow of config
                     Ok(_) => {
-                        model.log_success("User ID saved to configuration.");
-                        model.user_selection_active = false; // Update state
-                                                             // Trigger refresh to load data now that user is selected
+                        model.log_success(t!("update_config_saved_success").to_string());
+                        model.user_selection_active = false;
                         Some(Message::TimeEntryRefresh)
                     }
                     Err(e) => {
-                        model.log_error(format!("Failed to save configuration: {}", e));
-                        ui::show_error(model, format!("Error saving config: {}", e));
-                        // Do not proceed if saving failed
+                        let error_msg =
+                            t!("update_failed_save_config", error = e.to_string()).to_string();
+                        model.log_error(error_msg.clone());
+                        ui::show_error(model, error_msg);
                         None
                     }
                 }
             } else if model.user_selection_active {
-                // Only show error if we were actually in selection mode
                 if log_no_id_error {
-                    model.log_error("Selected user has no ID.");
-                    ui::show_error(model, "Selected user has no ID.".to_string());
+                    model.log_error(t!("error_user_no_id").to_string());
+                    ui::show_error(model, t!("error_user_no_id").to_string());
                 } else {
-                    // This case covers when no item was selected or index was out of bounds
-                    model.log_warning("User confirmation attempted without a valid selection.");
-                    // Optionally show a less severe message or just do nothing
-                    // ui::show_error(model, "No user selected.".to_string());
+                    model.log_warning(t!("warning_confirm_no_selection").to_string());
                 }
                 None
             } else {
-                // If not user_selection_active, just do nothing
                 None
             }
         }
@@ -1185,16 +1040,21 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
 
         Message::EditTimeEntryFieldClick(field) => {
             if model.edit_state.active {
-                // Save current field data before changing fields
                 update_edit_field_from_editor(&mut model.edit_state);
-
-                // Set the new field
                 model.edit_state.selected_field = field;
-
-                // Initialize editor for the new field
                 initialize_editor_or_autocomplete(&mut model.edit_state);
+                model.log_debug(t!(
+                    "update_debug_click_field",
+                    field = format!("{:?}", field)
+                ));
+            }
+            None
+        }
 
-                model.log_debug(format!("Clicked on field: {:?}", field));
+        Message::EditTimeEntryKeyPress(key) => {
+            if model.edit_state.active {
+                model.edit_state.editor.input(key);
+                update_edit_field_from_editor(&mut model.edit_state);
             }
             None
         }

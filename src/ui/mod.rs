@@ -8,6 +8,7 @@ pub use autocomplete::Autocomplete;
 pub use color::*;
 pub use modal::*;
 pub use render::*;
+use rust_i18n::t;
 pub use shortcuts::*;
 
 /// Format a contact name for display, prioritizing company name and falling back to person name if needed
@@ -31,7 +32,7 @@ pub(crate) fn format_contact_name(contact: &crate::moneybird::types::Contact) ->
         }
     } else {
         // No name information available
-        "Unnamed Contact".to_string()
+        t!("ui_unnamed_contact").to_string()
     }
 }
 
@@ -45,8 +46,8 @@ pub(crate) fn get_project_name(
             .iter()
             .find(|p| p.id.as_ref().unwrap_or(&"".to_string()) == id)
             .map(|p| p.name.clone().unwrap_or_default())
-            .unwrap_or_else(|| "Undefined".to_string()),
-        None => "Undefined".to_string(),
+            .unwrap_or_else(|| t!("ui_undefined").to_string()),
+        None => t!("ui_undefined").to_string(),
     }
 }
 
@@ -60,7 +61,7 @@ pub(crate) fn get_contact_name(
             .iter()
             .find(|c| c.id.as_ref().unwrap_or(&"".to_string()) == id)
             .map(format_contact_name)
-            .unwrap_or_else(|| "Undefined".to_string()),
-        None => "Undefined".to_string(),
+            .unwrap_or_else(|| t!("ui_undefined").to_string()),
+        None => t!("ui_undefined").to_string(),
     }
 }

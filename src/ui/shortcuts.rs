@@ -4,6 +4,7 @@ use ratatui::layout::{Alignment, Offset, Rect};
 use ratatui::prelude::{Line, Modifier, Span, Style, Widget};
 use ratatui::style::Color;
 use ratatui::widgets::Clear;
+use rust_i18n::t;
 
 /// Enum to define shortcut structures for the constructor
 pub enum Shortcut<'a> {

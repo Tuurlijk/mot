@@ -1,6 +1,7 @@
 use crate::{ui, AppModel};
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, MouseEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use rust_i18n::t;
 use std::time::Duration;
 
 #[derive(PartialEq, Clone)]
@@ -89,7 +90,7 @@ pub fn handle_event(model: &mut AppModel) -> Result<Option<Message>> {
                 {
                     // Check if we're in a modal cooldown period
                     if model.modal_interaction.is_in_cooldown() {
-                        model.log_debug("Ignoring key press during modal cooldown period");
+                        model.log_debug(t!("event_ignore_modal_cooldown"));
                         return Ok(None);
                     }
 
@@ -134,9 +135,9 @@ pub fn handle_event(model: &mut AppModel) -> Result<Option<Message>> {
             };
 
             if should_refresh {
-                model.log_debug(format!(
-                    "Debounce timeout reached for {:?}, triggering refresh.",
-                    model.edit_state.selected_field
+                model.log_debug(t!(
+                    "event_debounce_timeout_reached",
+                    field = format!("{:?}", model.edit_state.selected_field)
                 ));
                 // Return Ok(Some(...)) directly
                 return Ok(Some(Message::AutocompleteRefresh));
@@ -149,7 +150,7 @@ pub fn handle_event(model: &mut AppModel) -> Result<Option<Message>> {
 fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
     // Toggle log panel key pressed, this works in any mode
     if key.code == KeyCode::F(12) {
-        model.log_notice("F12: Toggle log panel");
+        model.log_notice(t!("event_toggle_log_panel"));
         return Some(Message::ToggleLogPanel);
     }
 
@@ -178,9 +179,10 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         match key.code {
             KeyCode::Enter | KeyCode::Char('y') => {
                 if let Some((modal_id, modal_type)) = modal_info {
-                    model.log_debug(format!(
-                        "Confirming modal: {} with key: {:?}",
-                        modal_id, key
+                    model.log_debug(t!(
+                        "event_confirming_modal",
+                        modal_id = modal_id,
+                        key = format!("{:?}", key)
                     ));
                     if modal_type == ui::ModalType::Confirm {
                         return Some(Message::ConfirmModal(modal_id));
@@ -192,9 +194,10 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             }
             KeyCode::Esc | KeyCode::Char('n') => {
                 if let Some((modal_id, _)) = modal_info {
-                    model.log_debug(format!(
-                        "Cancelling modal: {} with key: {:?}",
-                        modal_id, key
+                    model.log_debug(t!(
+                        "event_cancelling_modal",
+                        modal_id = modal_id,
+                        key = format!("{:?}", key)
                     ));
                     return Some(Message::DismissModal(modal_id, true));
                 }
@@ -202,9 +205,10 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             }
             KeyCode::Char(' ') | KeyCode::Tab | KeyCode::BackTab => {
                 if let Some((modal_id, _)) = modal_info {
-                    model.log_debug(format!(
-                        "Dismissing modal: {} with key: {:?}",
-                        modal_id, key
+                    model.log_debug(t!(
+                        "event_dismissing_modal",
+                        modal_id = modal_id,
+                        key = format!("{:?}", key)
                     ));
                     return Some(Message::DismissModal(modal_id, false));
                 }
@@ -336,9 +340,9 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 // Pass to standard editor fields if appropriate, otherwise ignore
                 match model.edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        model.log_debug(format!(
-                            "Ignoring unhandled key ({:?}) in project/contact field",
-                            key.code
+                        model.log_debug(t!(
+                            "event_ignoring_unhandled_key",
+                            key = format!("{:?}", key.code)
                         ));
                         None // Ignore in Project/Contact fields as they don't use the shared editor
                     }
@@ -402,7 +406,10 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
         // Check if click is on any of the stored field areas
         for (&field, &area) in &model.edit_state.field_areas {
             if area.contains(mouse_pos) {
-                model.log_debug(format!("Click detected on field: {:?}", field));
+                model.log_debug(t!(
+                    "update_debug_click_field",
+                    field = format!("{:?}", field)
+                ));
                 return Some(Message::EditTimeEntryFieldClick(field));
             }
         }
@@ -429,9 +436,10 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
 
                     // Ensure the calculated index is within the bounds of the data
                     if selected_index < model.time_entries_for_table.len() {
-                        model.log_debug(format!(
-                            "Mouse click detected on row: {}. Selected index: {}",
-                            relative_row, selected_index
+                        model.log_debug(t!(
+                            "event_mouse_click_detected",
+                            row = relative_row.to_string(),
+                            index = selected_index.to_string()
                         ));
                         return Some(Message::TimeEntrySelectRow(selected_index));
                     }

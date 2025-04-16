@@ -2,6 +2,7 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
+use rust_i18n::t;
 
 use super::{Shortcut, Shortcuts};
 
@@ -67,7 +68,7 @@ pub fn show_error(model: &mut crate::AppModel, message: String) {
     show_modal(
         model,
         ModalData {
-            title: "Error".to_string(),
+            title: t!("modal_error_title").to_string(),
             message,
             modal_type: ModalType::Error,
             id: Some("error".to_string()),
@@ -81,7 +82,7 @@ pub fn show_connection_error(model: &mut crate::AppModel, message: String) {
     show_modal(
         model,
         ModalData {
-            title: "Connection Error".to_string(),
+            title: t!("modal_connection_error_title").to_string(),
             message,
             modal_type: ModalType::Error,
             id: Some("connection_error".to_string()),
@@ -106,8 +107,8 @@ pub fn show_confirmation(
             modal_type: ModalType::Confirm,
             buttons: Some(
                 Shortcuts::new(vec![
-                    Shortcut::Pair("Esc", "Cancel"),
-                    Shortcut::Pair("Enter", "Ok"),
+                    Shortcut::Pair("Esc", t!("modal_cancel").as_str()),
+                    Shortcut::Pair("Enter", t!("modal_ok").as_str()),
                 ])
                 .with_key_style(
                     model
@@ -171,7 +172,7 @@ pub fn render_modal(model: &crate::AppModel, frame: &mut Frame) {
         // Prepare the bottom instructions text
         let dismiss_shortcut = Shortcuts::new(vec![Shortcut::Pair(
             "Enter",
-            "Press Enter or any key to dismiss",
+            t!("modal_press_enter_to_dismiss").as_str(),
         )])
         .with_key_style(
             model

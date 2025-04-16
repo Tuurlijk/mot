@@ -4,6 +4,7 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Stylize};
 use ratatui::widgets::{Block, Borders, Padding};
 use ratatui::{symbols, Frame};
+use rust_i18n::t;
 
 pub fn render_search(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     let collapsed_top_border_set = symbols::border::Set {
@@ -13,9 +14,9 @@ pub fn render_search(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     };
 
     let shortcuts = Shortcuts::new(vec![
-        Shortcut::Pair("🔍", "filter"),
-        Shortcut::Pair("Esc", "exit"),
-        Shortcut::Pair("Ctrl+U", "clear"),
+        Shortcut::Pair("🔍", t!("ui_shortcut_filter").as_ref()),
+        Shortcut::Pair("Esc", t!("ui_shortcut_exit").as_ref()),
+        Shortcut::Pair("Ctrl+U", t!("ui_shortcut_clear").as_ref()),
     ])
     .with_alignment(Alignment::Left)
     .with_key_style(
@@ -36,7 +37,6 @@ pub fn render_search(model: &mut AppModel, area: Rect, frame: &mut Frame) {
         })
         .border_set(collapsed_top_border_set)
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-        // .title(" 🔍 ")
         .title(shortcuts.as_line())
         .style(model.appearance.default_style);
 

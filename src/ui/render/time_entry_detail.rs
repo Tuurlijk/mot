@@ -6,17 +6,18 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 use ratatui::{symbols, Frame};
+use rust_i18n::t;
 
 pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame) {
     let shortcuts = Shortcuts::new(vec![
-        Shortcut::Trio("◀", "week", "▶"),
-        Shortcut::Pair("t", "this week"),
-        Shortcut::Pair("f", "filter"),
-        Shortcut::Pair("c", "create"),
-        Shortcut::Pair("e", "edit"),
-        Shortcut::Pair("d", "delete"),
-        Shortcut::Pair("x", "export"),
-        Shortcut::Pair("q", "quit"),
+        Shortcut::Trio("◀", t!("ui_shortcut_week").as_ref(), "▶"),
+        Shortcut::Pair("t", t!("ui_shortcut_this_week").as_ref()),
+        Shortcut::Pair("f", t!("ui_shortcut_filter").as_ref()),
+        Shortcut::Pair("c", t!("ui_shortcut_create").as_ref()),
+        Shortcut::Pair("e", t!("ui_shortcut_edit").as_ref()),
+        Shortcut::Pair("d", t!("ui_shortcut_delete").as_ref()),
+        Shortcut::Pair("x", t!("ui_shortcut_export").as_ref()),
+        Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
     ])
     .with_alignment(Alignment::Right)
     .with_key_style(
@@ -49,20 +50,18 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
     {
         // Render an empty detail view with a message
         let message = if model.time_entries_for_table.is_empty() {
-            format!(
-                "No time entries found for this week.\n\n{}",
-                datetime::get_week_description(
-                    model.week_offset,
-                    &model
-                        .administration
-                        .time_zone
-                        .clone()
-                        .unwrap_or_else(|| "UTC".to_string()),
-                    &model.config.week_starts_on
-                )
-            )
+            let week_desc = datetime::get_week_description(
+                model.week_offset,
+                &model
+                    .administration
+                    .time_zone
+                    .clone()
+                    .unwrap_or_else(|| "UTC".to_string()),
+                &model.config.week_starts_on,
+            );
+            t!("ui_detail_no_entries", week_description = week_desc).to_string()
         } else {
-            "No item selected.".to_string()
+            t!("ui_detail_no_selection").to_string()
         };
 
         let detail = Paragraph::new(message).block(detail_block.clone());
@@ -75,7 +74,7 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
     // Ensure the selected index is valid
     if selected_idx >= model.time_entries_for_table.len() {
         // Render an empty detail view with error message
-        let detail = Paragraph::new("Invalid selection index.").block(detail_block.clone());
+        let detail = Paragraph::new(t!("ui_detail_invalid_selection")).block(detail_block.clone());
         frame.render_widget(detail, area);
         return; // Return early
     }

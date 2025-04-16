@@ -2,6 +2,7 @@ use crate::model::TimeEntryForTable;
 use chrono::{DateTime, Datelike, ParseError, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
 use ratatui::{style::Style, text::Span};
+use rust_i18n::t;
 
 /// Parse an RFC3339 string into a DateTime
 fn parse_rfc3339(date_str: &str) -> Result<DateTime<chrono::FixedOffset>, ParseError> {
@@ -28,7 +29,7 @@ fn format_with_timezone(
 pub fn parse_and_format(date_str: &str, format_str: &str, timezone: &str) -> String {
     match parse_rfc3339(date_str) {
         Ok(date) => format_with_timezone(&date, format_str, timezone),
-        Err(_) => "Invalid date".to_string(),
+        Err(_) => t!("dt_invalid_date").to_string(),
     }
 }
 
@@ -150,12 +151,13 @@ pub fn get_week_range_strings(
 pub fn get_week_description(week_offset: i32, timezone: &str, week_starts_on: &str) -> String {
     let (start, end) = calculate_week_range(week_offset, timezone, week_starts_on);
 
-    format!(
-        "{}: {} to {}",
-        get_title_week_description(week_offset),
-        start.format("%a %d %b %Y"),
-        end.format("%a %d %b %Y")
+    t!(
+        "dt_week_description",
+        week_desc = get_title_week_description(week_offset),
+        start_date = start.format("%a %d %b %Y").to_string(),
+        end_date = end.format("%a %d %b %Y").to_string()
     )
+    .to_string()
 }
 
 /// Get the ISO week number for the given week offset
@@ -170,15 +172,15 @@ pub fn get_week_number(week_offset: i32, timezone: &str, week_starts_on: &str) -
 /// Get a relative week description for title display
 pub fn get_title_week_description(week_offset: i32) -> String {
     if week_offset == 0 {
-        "this week".to_string()
+        t!("dt_this_week").to_string()
     } else if week_offset == -1 {
-        "last week".to_string()
+        t!("dt_last_week").to_string()
     } else if week_offset < -1 {
-        format!("{} weeks ago", week_offset.abs())
+        t!("dt_weeks_ago", count = week_offset.abs()).to_string()
     } else if week_offset == 1 {
-        "next week".to_string()
+        t!("dt_next_week").to_string()
     } else {
-        format!("{} weeks from now", week_offset)
+        t!("dt_weeks_from_now", count = week_offset).to_string()
     }
 }
 
@@ -202,22 +204,31 @@ pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u32, u32) {
 
 /// Get a formatted duration string for display
 pub fn format_duration(hours: u32, minutes: u32, style: Style) -> Vec<Span<'static>> {
+    let hour_label = t!("dt_duration_hour");
+    let minute_label = t!("dt_duration_minute");
+
     if hours >= 1 && minutes >= 1 {
         vec![
             Span::raw(format!("{}", hours)).style(style),
-            Span::raw("h "),
+            Span::raw(format!("{} ", hour_label)),
             Span::raw(format!("{}", minutes)).style(style),
-            Span::raw("m"),
+            Span::raw(minute_label.to_string()),
         ]
     } else if hours >= 1 {
-        vec![Span::raw(format!("{}", hours)).style(style), Span::raw("h")]
+        vec![
+            Span::raw(format!("{}", hours)).style(style),
+            Span::raw(hour_label.to_string()),
+        ]
     } else if minutes >= 1 {
         vec![
             Span::raw(format!("{}", minutes)).style(style),
-            Span::raw("m"),
+            Span::raw(minute_label.to_string()),
         ]
     } else {
-        vec![Span::raw("0").style(style), Span::raw("m")]
+        vec![
+            Span::raw("0").style(style),
+            Span::raw(minute_label.to_string()),
+        ]
     }
 }
 
@@ -356,7 +367,8 @@ mod tests {
 
     #[test]
     fn test_get_title_week_description() {
-        // Test different week offsets
+        rust_i18n::set_locale("en"); // Ensure tests run with English locale
+                                     // Test different week offsets
         assert_eq!(get_title_week_description(0), "this week");
         assert_eq!(get_title_week_description(-1), "last week");
         assert_eq!(get_title_week_description(-2), "2 weeks ago");
@@ -401,6 +413,7 @@ mod tests {
 
     #[test]
     fn test_format_duration() {
+        rust_i18n::set_locale("en"); // Ensure tests run with English locale
         let style = Style::default();
 
         // Test hour and minutes
@@ -432,7 +445,8 @@ mod tests {
 
     #[test]
     fn test_parse_and_format() {
-        // Test valid RFC3339 date
+        rust_i18n::set_locale("en"); // Ensure tests run with English locale
+                                     // Test valid RFC3339 date
         let formatted = parse_and_format(
             "2023-08-09T10:30:00+02:00",
             "%Y-%m-%d %H:%M",

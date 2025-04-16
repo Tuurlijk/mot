@@ -1,4 +1,5 @@
 use config::{Config, File};
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -12,6 +13,7 @@ pub struct Configuration {
     pub user_id: Option<String>,
     #[serde(default = "default_week_start")]
     pub week_starts_on: String,
+    pub language: Option<String>,
 }
 
 fn default_week_start() -> String {
@@ -26,6 +28,7 @@ impl Default for Configuration {
             administration_id: None,
             user_id: None,
             week_starts_on: default_week_start(),
+            language: None,
         }
     }
 }
@@ -46,7 +49,7 @@ pub fn get_config() -> Config {
     // Create config directory if it doesn't exist
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent).unwrap_or_else(|_| {
-            println!("Could not create config directory");
+            println!("{}", t!("config_create_dir_error"));
             std::process::exit(1);
         });
     }
@@ -60,7 +63,7 @@ pub fn get_config() -> Config {
         .add_source(File::from(config_path).required(true))
         .build()
         .unwrap_or_else(|_| {
-            println!("Could not load configuration file");
+            println!("{}", t!("config_load_error"));
             std::process::exit(1);
         })
 }
@@ -70,7 +73,7 @@ pub fn get_configuration() -> Configuration {
     config
         .try_deserialize::<Configuration>()
         .unwrap_or_else(|e| {
-            println!("Could not deserialize configuration: {}", e);
+            println!("{}: {}", t!("config_deserialize_error"), e);
             std::process::exit(1);
         })
 }
@@ -81,15 +84,19 @@ pub fn save_configuration(config: &Configuration) -> Result<(), color_eyre::eyre
     let toml_string = toml::to_string_pretty(config)?;
 
     let mut file = fs::File::create(&config_path).map_err(|e| {
-        color_eyre::eyre::eyre!(
-            "Could not create/open config file for writing at {:?}: {}",
-            config_path,
-            e
-        )
+        color_eyre::eyre::eyre!(t!(
+            "config_create_file_error",
+            path = format!("{:?}", config_path),
+            error = e
+        ))
     })?;
 
     file.write_all(toml_string.as_bytes()).map_err(|e| {
-        color_eyre::eyre::eyre!("Could not write to config file at {:?}: {}", config_path, e)
+        color_eyre::eyre::eyre!(t!(
+            "config_write_file_error",
+            path = format!("{:?}", config_path),
+            error = e
+        ))
     })?;
 
     Ok(())
@@ -98,28 +105,40 @@ pub fn save_configuration(config: &Configuration) -> Result<(), color_eyre::eyre
 fn create_default_config(config_path: &PathBuf) {
     let default_config = Configuration::default();
     let toml = toml::to_string_pretty(&default_config).unwrap_or_else(|_| {
-        println!("Could not serialize default configuration");
+        println!("{}", t!("config_serialize_error"));
         std::process::exit(1);
     });
 
     let mut file = fs::File::create(config_path).unwrap_or_else(|_| {
-        println!("Could not create config file at {:?}", config_path);
+        println!(
+            "{}",
+            t!(
+                "config_create_file_error_path",
+                path = format!("{:?}", config_path)
+            )
+        );
         std::process::exit(1);
     });
 
     file.write_all(toml.as_bytes()).unwrap_or_else(|_| {
-        println!("Could not write to config file");
+        println!("{}", t!("config_write_error"));
         std::process::exit(1);
     });
 
-    println!("Created default configuration at {:?}", config_path);
+    println!(
+        "{}",
+        t!(
+            "config_created_default",
+            path = format!("{:?}", config_path)
+        )
+    );
 }
 
 fn get_config_path() -> PathBuf {
     dirs::config_dir()
-        .ok_or_else(|| color_eyre::eyre::eyre!("Could not determine config directory"))
+        .ok_or_else(|| color_eyre::eyre::eyre!(t!("config_determine_dir_error")))
         .unwrap_or_else(|_| {
-            println!("Could not determine config directory");
+            println!("{}", t!("config_determine_dir_error"));
             std::process::exit(1);
         })
         .join(get_program_name())
@@ -136,7 +155,7 @@ fn get_program_name() -> String {
                 .map(|s| s.to_string())
         })
         .unwrap_or_else(|| {
-            println!("Failed to get executable path");
+            println!("{}", t!("config_executable_path_error"));
             "unknown".to_string()
         })
 }

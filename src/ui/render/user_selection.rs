@@ -8,11 +8,12 @@ use ratatui::{
     style::{Modifier, Style},
     widgets::{Block, BorderType, Borders, Cell, Row, Table},
 };
+use rust_i18n::t;
 
 pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     let shortcuts = Shortcuts::new(vec![
-        Shortcut::Pair("Enter", "select user"),
-        Shortcut::Pair("Esc", "exit user selection"),
+        Shortcut::Pair("Enter", t!("ui_shortcut_select_user").as_ref()),
+        Shortcut::Pair("Esc", t!("ui_shortcut_exit_user_selection").as_ref()),
     ])
     .with_alignment(Alignment::Right)
     .with_key_style(
@@ -24,9 +25,14 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
     )
     .with_label_style(model.appearance.default_style);
 
-    let header_cells = ["ID", "Name", "Email"]
-        .iter()
-        .map(|h| Cell::from(*h).style(model.appearance.default_style.add_modifier(Modifier::BOLD)));
+    let header_cells = [
+        Cell::from(t!("ui_user_id"))
+            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
+        Cell::from(t!("ui_user_name"))
+            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
+        Cell::from(t!("ui_user_email"))
+            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
+    ];
     let header = Row::new(header_cells).height(1).bottom_margin(1);
 
     let rows = model.users.iter().map(|user| {
@@ -60,7 +66,7 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(" Select Default User ")
+            .title(format!(" {} ", t!("ui_select_default_user")))
             .title_alignment(Alignment::Center)
             .title_bottom(shortcuts.as_line())
             .style(model.appearance.default_style),

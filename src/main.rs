@@ -15,6 +15,12 @@ mod tui;
 mod ui;
 mod update;
 
+// Import and initialize rust-i18n
+use rust_i18n::t;
+
+// Initialize i18n with locales directory and English as fallback
+rust_i18n::i18n!("locales", fallback = "en");
+
 use clap::Parser;
 use color_eyre::eyre::{self};
 use event::handle_event;
@@ -33,19 +39,31 @@ async fn main() -> color_eyre::Result<()> {
     };
     model.config = config::get_configuration();
 
+    // Set locale from command line arguments first, then from config if available
+    if let Some(language) = &args.language {
+        rust_i18n::set_locale(language);
+        model.log_notice(t!("notice_language_command_line", language = language));
+
+        // Optionally update config with the selected language
+        model.config.language = Some(language.clone());
+    } else if let Some(language) = &model.config.language {
+        rust_i18n::set_locale(language);
+        model.log_notice(t!("notice_language_configured", language = language));
+    }
+
     // Check connectivity to the MoneyBird API but don't exit on failure
-    model.log_notice("Checking MoneyBird API connectivity...");
+    model.log_notice(t!("notice_checking_api"));
     if let Err(err) = api::check_connectivity(&model.client).await {
-        model.log_error(format!("Connection error: {}", err));
-        ui::show_connection_error(&mut model, format!("Connection error: {}", err));
+        model.log_error(t!("connection_error", error = err.to_string()));
+        ui::show_connection_error(&mut model, t!("connection_error", error = err.to_string()));
         // Continue with the app - the error will be shown in the main loop
     } else {
-        model.log_success("Successfully connected to MoneyBird API");
+        model.log_success(t!("success_connection"));
     }
 
     // Initialize the application colors
     ui::color::setup_colors(&mut model.appearance);
-    model.log_success("UI colors initialized");
+    model.log_success(t!("success_colors_initialized"));
 
     // Try to get administration information if we have connectivity
     if !model.has_blocking_error() {
@@ -54,30 +72,33 @@ async fn main() -> color_eyre::Result<()> {
                 match api::get_administration_by_id(&model.client, &administration_id).await {
                     Ok(administration) => {
                         model.administration = administration;
-                        model.log_notice(format!(
-                            "Administration: {:?} {:?}",
-                            model.administration.id.clone().unwrap_or_default(),
-                            model.administration.name.clone().unwrap_or_default()
+                        model.log_notice(t!(
+                            "notice_administration",
+                            id = model.administration.id.clone().unwrap_or_default(),
+                            name = model.administration.name.clone().unwrap_or_default()
                         ));
                     }
                     Err(err) => {
-                        ui::show_error(&mut model, format!("Administration error: {}", err));
+                        ui::show_error(
+                            &mut model,
+                            t!("error_administration", error = err.to_string()),
+                        );
                     }
                 }
             }
             None => match api::get_first_administration(&model.client).await {
                 Ok(administration) => {
                     model.administration = administration;
-                    model.log_notice(format!(
-                        "Administration: {:?} {:?}",
-                        model.administration.id.clone().unwrap_or_default(),
-                        model.administration.name.clone().unwrap_or_default()
+                    model.log_notice(t!(
+                        "notice_administration",
+                        id = model.administration.id.clone().unwrap_or_default(),
+                        name = model.administration.name.clone().unwrap_or_default()
                     ));
                 }
                 Err(err) => {
                     ui::show_error(
                         &mut model,
-                        format!("Failed to get administrations: {}", err),
+                        t!("error_get_administrations", error = err.to_string()),
                     );
                 }
             },
@@ -87,18 +108,17 @@ async fn main() -> color_eyre::Result<()> {
     // Check for user_id in config, fetch users if necessary
     if !model.has_blocking_error() {
         if model.config.user_id.is_none() {
-            model.log_notice("No user_id found in configuration, fetching users for selection...");
+            model.log_notice(t!("notice_no_user_id"));
             let administration_id = model.administration.id.clone().unwrap_or_default();
             if !administration_id.is_empty() {
                 match api::get_all_users(&model.client, &administration_id).await {
                     Ok(users) => {
                         if users.is_empty() {
-                            let err_msg = "No users found for this administration. Cannot proceed."
-                                .to_string();
+                            let err_msg = t!("error_no_users");
                             model.log_error(err_msg.clone());
                             ui::show_error(&mut model, err_msg);
                         } else {
-                            model.log_success(format!("Fetched {} users.", users.len()));
+                            model.log_success(t!("success_fetched_users", count = users.len()));
                             model.users = users;
                             model.user_selection_active = true; // Activate user selection mode
                                                                 // Select the first user by default
@@ -108,21 +128,21 @@ async fn main() -> color_eyre::Result<()> {
                         }
                     }
                     Err(err) => {
-                        let err_msg = format!("Failed to fetch users: {}. Please check configuration or connectivity.", err);
+                        let err_msg = t!("error_fetch_users", error = err.to_string());
                         model.log_error(err_msg.clone());
                         ui::show_error(&mut model, err_msg);
                     }
                 }
             } else {
                 // This case should ideally not happen if administration was fetched successfully
-                let err_msg = "Administration ID is missing, cannot fetch users.".to_string();
+                let err_msg = t!("error_missing_admin_id");
                 model.log_error(err_msg.clone());
                 ui::show_error(&mut model, err_msg);
             }
         } else {
-            model.log_success(format!(
-                "Using configured user_id: {:?}",
-                model.config.user_id
+            model.log_success(t!(
+                "success_using_user_id",
+                user_id = model.config.user_id.clone().unwrap_or_default()
             ));
         }
     }
@@ -148,7 +168,7 @@ async fn main() -> color_eyre::Result<()> {
             Err(err) => {
                 ui::show_error(
                     &mut model,
-                    format!("Warning: Failed to fetch projects: {}", err),
+                    t!("error_fetch_projects", error = err.to_string()),
                 );
             }
         }
@@ -164,7 +184,8 @@ async fn main() -> color_eyre::Result<()> {
             return Err(eyre::eyre!("{}\n{}", modal.title, modal.message));
         } else {
             // Export time entries to a csv file using command-line options
-            return file::handle_export_command(&mut model, args.week, args.query).await;
+            return file::handle_export_command(&mut model, args.week.clone(), args.query.clone())
+                .await;
         }
     }
 
