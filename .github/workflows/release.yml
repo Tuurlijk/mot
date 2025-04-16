@@ -193,3 +193,6 @@ jobs:
   #         labels: ${{ steps.meta.outputs.labels }}
   #         cache-from: type=gha
   #         cache-to: type=gha,mode=max 
+
+permissions:
+  contents: write  # Gives permission to create and modify releases 
