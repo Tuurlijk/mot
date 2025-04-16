@@ -19,7 +19,6 @@ ratatui = "0.29.0"
 tui-textarea = "0.7.0"
 color-eyre = "0.6.3"
 progenitor-client = "0.9.1"
-rust-i18n = "2.3.1"
 
 reqwest = { version = "0.12", features = ["json", "stream", "native-tls"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -34,6 +33,7 @@ tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 # Utils
 supports-color = "3.0.0"
 terminal-light = "1.7.0"
+rust-i18n = "3.1.4"
 
 # Use vendored OpenSSL for non-Windows platforms only
 [target.'cfg(not(windows))'.dependencies]

@@ -3,6 +3,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 use rust_i18n::t;
+use std::borrow::Cow;
 
 use super::{Shortcut, Shortcuts};
 
@@ -64,12 +65,12 @@ pub fn show_modal(model: &mut crate::AppModel, modal: ModalData) {
 }
 
 /// Helper function to show an error message in the UI
-pub fn show_error(model: &mut crate::AppModel, message: String) {
+pub fn show_error(model: &mut crate::AppModel, message: impl Into<Cow<'static, str>>) {
     show_modal(
         model,
         ModalData {
             title: t!("modal_error_title").to_string(),
-            message,
+            message: message.into().to_string(),
             modal_type: ModalType::Error,
             id: Some("error".to_string()),
             ..Default::default()
@@ -78,12 +79,12 @@ pub fn show_error(model: &mut crate::AppModel, message: String) {
 }
 
 /// Helper function to show a connection error message in the UI
-pub fn show_connection_error(model: &mut crate::AppModel, message: String) {
+pub fn show_connection_error(model: &mut crate::AppModel, message: impl Into<Cow<'static, str>>) {
     show_modal(
         model,
         ModalData {
             title: t!("modal_connection_error_title").to_string(),
-            message,
+            message: message.into().to_string(),
             modal_type: ModalType::Error,
             id: Some("connection_error".to_string()),
             ..Default::default()
@@ -94,21 +95,21 @@ pub fn show_connection_error(model: &mut crate::AppModel, message: String) {
 /// Helper function to show a confirmation modal
 pub fn show_confirmation(
     model: &mut crate::AppModel,
-    title: String,
-    message: String,
+    title: impl Into<Cow<'static, str>>,
+    message: impl Into<Cow<'static, str>>,
     on_confirm: Option<crate::event::Message>,
     on_cancel: Option<crate::event::Message>,
 ) {
     show_modal(
         model,
         ModalData {
-            title,
-            message,
+            title: title.into().to_string(),
+            message: message.into().to_string(),
             modal_type: ModalType::Confirm,
             buttons: Some(
                 Shortcuts::new(vec![
-                    Shortcut::Pair("Esc", t!("modal_cancel").as_str()),
-                    Shortcut::Pair("Enter", t!("modal_ok").as_str()),
+                    Shortcut::Pair("Esc", t!("modal_cancel").as_ref()),
+                    Shortcut::Pair("Enter", t!("modal_ok").as_ref()),
                 ])
                 .with_key_style(
                     model
@@ -127,12 +128,17 @@ pub fn show_confirmation(
 }
 
 /// Helper function to show an information modal
-pub fn show_info(model: &mut crate::AppModel, id: &str, title: String, message: String) {
+pub fn show_info(
+    model: &mut crate::AppModel,
+    id: &str,
+    title: impl Into<Cow<'static, str>>,
+    message: impl Into<Cow<'static, str>>,
+) {
     show_modal(
         model,
         ModalData {
-            title,
-            message,
+            title: title.into().to_string(),
+            message: message.into().to_string(),
             modal_type: ModalType::Info,
             id: Some(id.to_string()),
             ..Default::default()
@@ -172,7 +178,7 @@ pub fn render_modal(model: &crate::AppModel, frame: &mut Frame) {
         // Prepare the bottom instructions text
         let dismiss_shortcut = Shortcuts::new(vec![Shortcut::Pair(
             "Enter",
-            t!("modal_press_enter_to_dismiss").as_str(),
+            t!("modal_press_enter_to_dismiss").as_ref(),
         )])
         .with_key_style(
             model

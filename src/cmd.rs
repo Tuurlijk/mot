@@ -5,19 +5,19 @@ use rust_i18n::t;
 #[clap(version, about = about_str())]
 pub(crate) struct Args {
     /// Export time entries to a csv file
-    #[clap(short = 'e', long, action = clap::ArgAction::SetTrue, help = t!("cmd_export_help"))]
+    #[clap(short = 'e', long, action = clap::ArgAction::SetTrue, help = t!("cmd_export_help").to_string())]
     pub(crate) export: bool,
 
     /// Week number to export
-    #[clap(short = 'w', long, default_value = "current week", help = t!("cmd_week_help"))]
+    #[clap(short = 'w', long, default_value = "current week", help = t!("cmd_week_help").to_string())]
     pub(crate) week: String,
 
     /// Filter query
-    #[clap(short = 'q', long, default_value = "", help = t!("cmd_query_help"))]
+    #[clap(short = 'q', long, default_value = "", help = t!("cmd_query_help").to_string())]
     pub(crate) query: String,
 
     /// Set the display language (e.g., en, nl)
-    #[clap(short = 'l', long, help = t!("cmd_language_help"))]
+    #[clap(short = 'l', long, help = t!("cmd_language_help").to_string())]
     pub(crate) language: Option<String>,
 }
 
@@ -37,8 +37,8 @@ fn about_str() -> &'static str {
      {}
      {}
  ",
-        t!("cmd_app_title"),
-        t!("cmd_app_credits"),
+        t!("cmd_app_title").to_string(),
+        t!("cmd_app_credits").to_string(),
         dynamic_value
     );
 
