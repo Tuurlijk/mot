@@ -26,15 +26,41 @@ A beautiful terminal-based interface for managing your MoneyBird time entries wi
 cargo install mot
 ```
 
-### From Source
+### Pre-built Binaries
+
+Pre-built binaries and packages are available on the [GitHub releases](https://github.com/Tuurlijk/mot/releases) page for multiple platforms and architectures:
+
+#### Binary Archives
+- **Linux**: x86_64, ARM (32/64-bit), RISC-V, PowerPC, s390x, and MUSL variants
+- **Windows**: 32-bit and 64-bit zip archives
+- **macOS**: Intel and Apple Silicon (ARM64) builds
+- **FreeBSD**: x86_64 builds
+
+#### Package Formats
+- **Debian/Ubuntu**: Native `.deb` packages
+- **Red Hat/Fedora/SUSE**: RPM packages
+- **Arch Linux**: AUR package
+- **macOS**: Homebrew formula and DMG disk image
+- **Nix**: Package for NixOS and Nix package manager
+
+Each release includes SHA256 checksums for verifying file integrity.
+
+#### Quick Installation
 
 ```bash
-git clone https://github.com/Tuurlijk/mot.git
-cd mot
-cargo build --release
+# Linux x86_64 example
+curl -L https://github.com/Tuurlijk/mot/releases/download/[version]/mot-linux-x86_64.tar.gz | tar xz
+./mot
+
+# Or install using your system's package manager
+# Debian/Ubuntu
+sudo dpkg -i mot_[version]_amd64.deb
+
+# Homebrew (macOS)
+brew install mot
 ```
 
-The binary will be available in `target/release/mot`.
+Replace `[version]` with the desired release version (e.g., `v1.4.56`).
 
 ## 🔧 Configuration
 
@@ -159,7 +185,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [MoneyBird](https://www.moneybird.com/) for providing the API
 - [Ratatui](https://github.com/ratatui-org/ratatui) for the amazing TUI framework
-- [Dennis Ameling](https://github.com/dennisameling/moneybird-openapi) for the original MoneyBird OpenAPI specification, which was trimmed using [apisnip](https://crates.io/crates/apisnip) for this project.
+- [Dennis Ameling](https://github.com/dennisameling/moneybird-openapi) for the original MoneyBird OpenAPI specification, which was trimmed using [mot](https://crates.io/crates/mot) for this project.
 - All contributors who have helped shape this project
 
 [mot.png]: https://github.com/Tuurlijk/mot/blob/images/images/mot.png?raw=true
