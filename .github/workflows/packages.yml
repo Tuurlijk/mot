@@ -1,0 +1,1032 @@
+name: Create Platform Packages
+
+permissions:
+  contents: write
+
+env:
+  PACKAGE_NAME: mot
+  PACKAGE_DESCRIPTION: "A terminal user interface (TUI) tool for moneybird"
+  PACKAGE_LONG_DESCRIPTION: "A terminal user interface (TUI) tool for tracking time in Moneybird. It provides a user-friendly terminal interface for managing time entries."
+  MAINTAINER_NAME: "Michiel Roos"
+  MAINTAINER_EMAIL: "mot.free.bra@michielroos.com"
+  GITHUB_REPO: "Tuurlijk/mot"
+  PACKAGE_HOMEPAGE: "https://github.com/Tuurlijk/mot"
+  PACKAGE_LICENSE: "MIT"
+
+on:
+  # Triggered after a release is created
+  release:
+    types: [created]
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to use for packaging (without v prefix)'
+        required: true
+        default: ''
+
+jobs:
+  create-debian-package:
+    name: Create Debian Package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, i386]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest release
+        id: get_release
+        if: github.event.inputs.version == ''
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from the release tag
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Extract from API response with safer parsing
+            RESPONSE='${{ steps.get_release.outputs.data }}'
+            TAG_NAME=$(echo "$RESPONSE" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+            VERSION=${TAG_NAME#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)"
+
+      - name: Download Linux binary
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: ${{ env.GITHUB_REPO }}
+          tag: "v${{ steps.extract_version.outputs.VERSION }}"
+          fileName: "${{ env.PACKAGE_NAME }}-linux-${{ matrix.arch == 'amd64' && 'x86_64' || (matrix.arch == 'i386' && 'i686' || matrix.arch) }}.tar.gz"
+          out-file-path: ./downloaded
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract binary
+        run: |
+          mkdir -p pkg/usr/bin
+          mkdir -p pkg/usr/share/doc/${{ env.PACKAGE_NAME }}
+          tar -xzf ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz -C ./pkg/usr/bin ${{ env.PACKAGE_NAME }}
+          cp README.md LICENSE pkg/usr/share/doc/${{ env.PACKAGE_NAME }}/ || true
+          chmod +x pkg/usr/bin/${{ env.PACKAGE_NAME }}
+
+      - name: Create Debian package
+        id: create_deb
+        run: |
+          # Map GitHub Action arch to Debian arch
+          DEBIAN_ARCH="${{ matrix.arch }}"
+          if [ "${{ matrix.arch }}" = "i386" ]; then
+            DEBIAN_ARCH="i386"
+          fi
+          
+          # Create Debian control file
+          mkdir -p pkg/DEBIAN
+          cat > pkg/DEBIAN/control << EOF
+          Package: ${{ env.PACKAGE_NAME }}
+          Version: ${{ steps.extract_version.outputs.VERSION }}
+          Section: utils
+          Priority: optional
+          Architecture: ${DEBIAN_ARCH}
+          Maintainer: ${{ env.MAINTAINER_NAME }} <${{ env.MAINTAINER_EMAIL }}>
+          Description: ${{ env.PACKAGE_DESCRIPTION }}
+           ${{ env.PACKAGE_LONG_DESCRIPTION }}
+          EOF
+          
+          # Build the package
+          DEB_FILENAME="${{ env.PACKAGE_NAME }}_${{ steps.extract_version.outputs.VERSION }}_${DEBIAN_ARCH}.deb"
+          dpkg-deb --build pkg "${DEB_FILENAME}"
+          echo "DEB_FILENAME=${DEB_FILENAME}" >> $GITHUB_OUTPUT
+          
+          # Create checksum
+          sha256sum "${DEB_FILENAME}" > "${DEB_FILENAME}.sha256"
+
+      - name: Upload Debian package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.create_deb.outputs.DEB_FILENAME }}
+            ${{ steps.create_deb.outputs.DEB_FILENAME }}.sha256
+          tag_name: v${{ steps.extract_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-rpm-package:
+    name: Create RPM Package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Only build for x86_64 as aarch64 is causing compatibility issues
+        arch: [x86_64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Get latest release
+        id: get_release
+        if: github.event.inputs.version == ''
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from the release tag
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Extract from API response with safer parsing
+            RESPONSE='${{ steps.get_release.outputs.data }}'
+            TAG_NAME=$(echo "$RESPONSE" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+            VERSION=${TAG_NAME#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)"
+          
+      - name: Install RPM build tools
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Download Linux binary
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: ${{ env.GITHUB_REPO }}
+          tag: "v${{ steps.extract_version.outputs.VERSION }}"
+          fileName: "${{ env.PACKAGE_NAME }}-linux-${{ matrix.arch }}.tar.gz"
+          out-file-path: ./downloaded
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify downloaded file
+        run: |
+          ls -la ./downloaded/
+          if [ ! -s ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz ]; then
+            echo "Error: Downloaded file is empty or does not exist"
+            exit 1
+          fi
+          file ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz
+
+      - name: Setup RPM build environment
+        run: |
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}
+          
+          # Extract binary
+          mkdir -p ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}/usr/bin
+          mkdir -p ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}/usr/share/doc/${{ env.PACKAGE_NAME }}
+          tar -xzf ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz -C ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}/usr/bin ${{ env.PACKAGE_NAME }}
+          cp README.md LICENSE ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}/usr/share/doc/${{ env.PACKAGE_NAME }}/ || true
+          chmod +x ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}/usr/bin/${{ env.PACKAGE_NAME }}
+          
+          # Create source tarball
+          cd ~/rpmbuild/SOURCES
+          tar -czf ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.tar.gz ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}
+
+      - name: Create spec file
+        run: |
+          cat > ~/rpmbuild/SPECS/${{ env.PACKAGE_NAME }}.spec << EOF
+          Name:           ${{ env.PACKAGE_NAME }}
+          Version:        ${{ steps.extract_version.outputs.VERSION }}
+          Release:        1%{?dist}
+          Summary:        ${{ env.PACKAGE_DESCRIPTION }}
+          
+          License:        ${{ env.PACKAGE_LICENSE }}
+          URL:            ${{ env.PACKAGE_HOMEPAGE }}
+          Source0:        %{name}-%{version}.tar.gz
+          
+          # Specify architecture explicitly without macros that might cause issues
+          BuildArch:      ${{ matrix.arch }}
+          
+          %description
+          ${{ env.PACKAGE_LONG_DESCRIPTION }}
+          
+          %prep
+          %setup -q
+          
+          %install
+          mkdir -p %{buildroot}
+          cp -a * %{buildroot}
+          
+          %files
+          %{_bindir}/${{ env.PACKAGE_NAME }}
+          %doc %{_docdir}/${{ env.PACKAGE_NAME }}/README.md
+          %license %{_docdir}/${{ env.PACKAGE_NAME }}/LICENSE
+          
+          %changelog
+          * $(date '+%a %b %d %Y') ${{ env.MAINTAINER_NAME }} <${{ env.MAINTAINER_EMAIL }}> - ${{ steps.extract_version.outputs.VERSION }}-1
+          - Automated package build
+          EOF
+
+      - name: Build RPM package
+        id: build_rpm
+        run: |
+          rpmbuild -ba ~/rpmbuild/SPECS/${{ env.PACKAGE_NAME }}.spec || {
+            echo "RPM build failed, checking issues..."
+            cat ~/rpmbuild/SPECS/${{ env.PACKAGE_NAME }}.spec
+            ls -la ~/rpmbuild/SOURCES/
+            echo "Contents of source tarball:"
+            tar -tvzf ~/rpmbuild/SOURCES/${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.tar.gz
+            exit 1
+          }
+          
+          # Find the built RPM
+          RPM_PATH=$(find ~/rpmbuild/RPMS -name "*.rpm" | head -1)
+          if [ -z "$RPM_PATH" ]; then
+            echo "No RPM package found in the build directory"
+            exit 1
+          fi
+          
+          RPM_FILENAME=$(basename "$RPM_PATH")
+          cp "$RPM_PATH" .
+          
+          # Create checksum
+          sha256sum "${RPM_FILENAME}" > "${RPM_FILENAME}.sha256"
+          
+          echo "RPM_FILENAME=${RPM_FILENAME}" >> $GITHUB_OUTPUT
+
+      - name: Upload RPM package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.build_rpm.outputs.RPM_FILENAME }}
+            ${{ steps.build_rpm.outputs.RPM_FILENAME }}.sha256
+          tag_name: v${{ steps.extract_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-apk-package:
+    name: Create Alpine Linux Package (APK)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from the release tag
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # If we got here, we need to manually get the latest release
+            REPO="${GITHUB_REPOSITORY}"
+            GITHUB_API="https://api.github.com/repos/${REPO}/releases/latest"
+            VERSION=$(curl -s ${GITHUB_API} | jq -r '.tag_name' | sed 's/^v//')
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          fi
+          VERSION=$(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)
+          echo "Using version: $VERSION"
+          # Export as environment variable for easier use in subsequent steps
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Download Linux binary
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: ${{ env.GITHUB_REPO }}
+          tag: "v${{ env.VERSION }}"
+          fileName: "${{ env.PACKAGE_NAME }}-linux-${{ matrix.arch }}.tar.gz"
+          out-file-path: ./downloaded
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify downloaded file
+        run: |
+          ls -la ./downloaded/
+          if [ ! -s ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz ]; then
+            echo "Error: Downloaded file is empty or does not exist"
+            exit 1
+          fi
+          file ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz
+
+      # Create .deb package as a fallback for Alpine Linux
+      - name: Create Debian package instead
+        id: create_deb
+        run: |
+          # Extract the binary
+          mkdir -p pkg/usr/bin
+          mkdir -p pkg/usr/share/doc/${{ env.PACKAGE_NAME }}
+          tar -xzf ./downloaded/${{ env.PACKAGE_NAME }}-linux-*.tar.gz -C pkg
+          
+          # Make sure binary is in the right place
+          if [ -f "pkg/${{ env.PACKAGE_NAME }}" ]; then
+            mkdir -p pkg/usr/bin
+            mv pkg/${{ env.PACKAGE_NAME }} pkg/usr/bin/
+          fi
+          
+          cp README.md LICENSE pkg/usr/share/doc/${{ env.PACKAGE_NAME }}/ || true
+          chmod +x pkg/usr/bin/${{ env.PACKAGE_NAME }}
+          
+          # Create Debian control file
+          mkdir -p pkg/DEBIAN
+          cat > pkg/DEBIAN/control << EOF
+          Package: ${{ env.PACKAGE_NAME }}
+          Version: ${{ env.VERSION }}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: ${{ env.MAINTAINER_NAME }} <${{ env.MAINTAINER_EMAIL }}>
+          Description: ${{ env.PACKAGE_DESCRIPTION }}
+           ${{ env.PACKAGE_LONG_DESCRIPTION }}
+          EOF
+          
+          # Build the package
+          DEB_FILENAME="${{ env.PACKAGE_NAME }}-alpine-${{ env.VERSION }}-${{ matrix.arch }}.deb"
+          dpkg-deb --build pkg "${DEB_FILENAME}"
+          echo "DEB_FILENAME=${DEB_FILENAME}" >> $GITHUB_OUTPUT
+          
+          # Create checksum
+          sha256sum "${DEB_FILENAME}" > "${DEB_FILENAME}.sha256"
+
+      - name: Upload Debian package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.create_deb.outputs.DEB_FILENAME }}
+            ${{ steps.create_deb.outputs.DEB_FILENAME }}.sha256
+          tag_name: v${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-macos-package:
+    name: Create macOS Package
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Get latest release
+        id: get_release
+        if: github.event.inputs.version == ''
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from the release tag
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Extract from API response with safer parsing
+            RESPONSE='${{ steps.get_release.outputs.data }}'
+            TAG_NAME=$(echo "$RESPONSE" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+            VERSION=${TAG_NAME#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)"
+
+      - name: Download macOS binaries
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: ${{ env.GITHUB_REPO }}
+          tag: "v${{ steps.extract_version.outputs.VERSION }}"
+          fileName: "${{ env.PACKAGE_NAME }}-macos-*.tar.gz"
+          out-file-path: ./downloaded
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Create DMG package
+      - name: Create macOS DMG package
+        id: create_dmg
+        run: |
+          # Create app structure
+          mkdir -p ${{ env.PACKAGE_NAME }}.app/Contents/{MacOS,Resources}
+          
+          # Extract x86_64 binary (use arm64 if available)
+          if [ -f "downloaded/${{ env.PACKAGE_NAME }}-macos-arm64.tar.gz" ]; then
+            tar -xzf downloaded/${{ env.PACKAGE_NAME }}-macos-arm64.tar.gz -C ./
+          else
+            tar -xzf downloaded/${{ env.PACKAGE_NAME }}-macos-x86_64.tar.gz -C ./
+          fi
+          
+          # Copy binary to app bundle
+          mv ${{ env.PACKAGE_NAME }} ${{ env.PACKAGE_NAME }}.app/Contents/MacOS/
+          
+          # Create Info.plist
+          cat > ${{ env.PACKAGE_NAME }}.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>${{ env.PACKAGE_NAME }}</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.michielroos.${{ env.PACKAGE_NAME }}</string>
+              <key>CFBundleName</key>
+              <string>${{ env.PACKAGE_NAME }}</string>
+              <key>CFBundleVersion</key>
+              <string>${{ steps.extract_version.outputs.VERSION }}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${{ steps.extract_version.outputs.VERSION }}</string>
+          </dict>
+          </plist>
+          EOF
+          
+          # Create DMG
+          hdiutil create -volname "${{ env.PACKAGE_NAME }}" -srcfolder ${{ env.PACKAGE_NAME }}.app -ov -format UDZO ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.dmg
+          
+          # Create checksum
+          shasum -a 256 ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.dmg > ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.dmg.sha256
+          
+          echo "DMG_FILENAME=${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.dmg" >> $GITHUB_OUTPUT
+
+      # Create Homebrew Formula
+      - name: Create Homebrew Formula
+        id: create_homebrew
+        run: |
+          # Create formula directory
+          mkdir -p homebrew-formula
+          
+          # Calculate SHA for macOS binaries
+          ARM64_SHA=""
+          X86_64_SHA=""
+          
+          if [ -f "downloaded/${{ env.PACKAGE_NAME }}-macos-arm64.tar.gz" ]; then
+            ARM64_SHA=$(shasum -a 256 downloaded/${{ env.PACKAGE_NAME }}-macos-arm64.tar.gz | cut -d ' ' -f 1)
+          fi
+          
+          if [ -f "downloaded/${{ env.PACKAGE_NAME }}-macos-x86_64.tar.gz" ]; then
+            X86_64_SHA=$(shasum -a 256 downloaded/${{ env.PACKAGE_NAME }}-macos-x86_64.tar.gz | cut -d ' ' -f 1)
+          fi
+          
+          # Create the formula file
+          cat > homebrew-formula/${{ env.PACKAGE_NAME }}.rb << EOF
+          class $(echo "${{ env.PACKAGE_NAME }}" | perl -pe 's/(?:^|-)(\w)/\U$1/g') < Formula
+            desc "${{ env.PACKAGE_DESCRIPTION }}"
+            homepage "${{ env.PACKAGE_HOMEPAGE }}"
+            version "${{ steps.extract_version.outputs.VERSION }}"
+            license "${{ env.PACKAGE_LICENSE }}"
+            
+            on_macos do
+              on_arm do
+                url "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ steps.extract_version.outputs.VERSION }}/${{ env.PACKAGE_NAME }}-macos-arm64.tar.gz"
+                sha256 "${ARM64_SHA}"
+              end
+              
+              on_intel do
+                url "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ steps.extract_version.outputs.VERSION }}/${{ env.PACKAGE_NAME }}-macos-x86_64.tar.gz"
+                sha256 "${X86_64_SHA}"
+              end
+            end
+            
+            on_linux do
+              url "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ steps.extract_version.outputs.VERSION }}/${{ env.PACKAGE_NAME }}-linux-x86_64.tar.gz"
+            end
+            
+            def install
+              bin.install "${{ env.PACKAGE_NAME }}"
+            end
+            
+            test do
+              assert_match "${{ env.PACKAGE_NAME }} ${{ steps.extract_version.outputs.VERSION }}", shell_output("#{bin}/${{ env.PACKAGE_NAME }} --version", 2)
+            end
+          end
+          EOF
+          
+          # Create a zip of the formula
+          zip -r ${{ env.PACKAGE_NAME }}-homebrew-${{ steps.extract_version.outputs.VERSION }}.zip homebrew-formula/${{ env.PACKAGE_NAME }}.rb
+          
+          echo "HOMEBREW_FORMULA=${{ env.PACKAGE_NAME }}-homebrew-${{ steps.extract_version.outputs.VERSION }}.zip" >> $GITHUB_OUTPUT
+
+      - name: Upload macOS packages to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.create_dmg.outputs.DMG_FILENAME }}
+            ${{ steps.create_dmg.outputs.DMG_FILENAME }}.sha256
+            ${{ steps.create_homebrew.outputs.HOMEBREW_FORMULA }}
+          tag_name: v${{ steps.extract_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-aur-package:
+    name: Create AUR Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Get latest release
+        id: get_release
+        if: github.event.inputs.version == ''
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            # Extract version from the release tag
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Extract from API response with safer parsing
+            RESPONSE='${{ steps.get_release.outputs.data }}'
+            TAG_NAME=$(echo "$RESPONSE" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+            VERSION=${TAG_NAME#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)"
+          
+      - name: Download source code
+        run: |
+          mkdir -p aur-package
+          cd aur-package
+          curl -L "${{ env.PACKAGE_HOMEPAGE }}/archive/refs/tags/v${{ steps.extract_version.outputs.VERSION }}.tar.gz" -o "${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.tar.gz"
+          
+          # Calculate SHA256 sum
+          SOURCE_SHA256=$(sha256sum "${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.tar.gz" | awk '{print $1}')
+          echo "SOURCE_SHA256=${SOURCE_SHA256}" >> $GITHUB_ENV
+
+      - name: Create PKGBUILD
+        id: create_pkgbuild
+        run: |
+          cd aur-package
+          
+          cat > PKGBUILD << EOF
+          # Maintainer: ${{ env.MAINTAINER_NAME }} <${{ env.MAINTAINER_EMAIL }}>
+          
+          pkgname=${{ env.PACKAGE_NAME }}
+          pkgver=${{ steps.extract_version.outputs.VERSION }}
+          pkgrel=1
+          pkgdesc="${{ env.PACKAGE_DESCRIPTION }}"
+          arch=('x86_64' 'aarch64')
+          url="${{ env.PACKAGE_HOMEPAGE }}"
+          license=('${{ env.PACKAGE_LICENSE }}')
+          depends=()
+          makedepends=('cargo')
+          source=("\${pkgname}-\${pkgver}.tar.gz::${{ env.PACKAGE_HOMEPAGE }}/archive/refs/tags/v\${pkgver}.tar.gz")
+          sha256sums=('${SOURCE_SHA256}')
+          
+          build() {
+            cd "\${pkgname}-\${pkgver}"
+            cargo build --release
+          }
+          
+          package() {
+            cd "\${pkgname}-\${pkgver}"
+            install -Dm755 "target/release/\${pkgname}" "\${pkgdir}/usr/bin/\${pkgname}"
+            install -Dm644 "LICENSE" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
+            install -Dm644 "README.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README.md"
+          }
+          EOF
+          
+          cat > .SRCINFO << EOF
+          pkgbase = ${{ env.PACKAGE_NAME }}
+          	pkgdesc = ${{ env.PACKAGE_DESCRIPTION }}
+          	pkgver = ${{ steps.extract_version.outputs.VERSION }}
+          	pkgrel = 1
+          	url = ${{ env.PACKAGE_HOMEPAGE }}
+          	arch = x86_64
+          	arch = aarch64
+          	license = ${{ env.PACKAGE_LICENSE }}
+          	makedepends = cargo
+          	source = ${{ env.PACKAGE_NAME }}-${{ steps.extract_version.outputs.VERSION }}.tar.gz::${{ env.PACKAGE_HOMEPAGE }}/archive/refs/tags/v${{ steps.extract_version.outputs.VERSION }}.tar.gz
+          	sha256sums = ${SOURCE_SHA256}
+          
+          pkgname = ${{ env.PACKAGE_NAME }}
+          EOF
+          
+          tar -czf ${{ env.PACKAGE_NAME }}-aur-${{ steps.extract_version.outputs.VERSION }}.tar.gz PKGBUILD .SRCINFO
+          echo "AUR_PACKAGE=${{ env.PACKAGE_NAME }}-aur-${{ steps.extract_version.outputs.VERSION }}.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Upload AUR package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aur-package/${{ steps.create_pkgbuild.outputs.AUR_PACKAGE }}
+          tag_name: v${{ steps.extract_version.outputs.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Modify the organize-release-assets job to add more diagnostics
+  organize-release-assets:
+    name: Organize Release Assets
+    # Update dependencies to remove the snap package
+    needs: [create-debian-package, create-rpm-package, create-aur-package, create-macos-package, create-nix-package]
+    runs-on: ubuntu-latest
+    if: always() # Run even if some of the previous jobs failed
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup debugging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Extract Version (Debug Step 1)
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION=${VERSION#v}
+          else
+            # Get latest release tag
+            REPO="${GITHUB_REPOSITORY}"
+            echo "Getting version from latest release for $REPO"
+            GITHUB_API="https://api.github.com/repos/${REPO}/releases/latest"
+            API_RESPONSE=$(curl -s ${GITHUB_API} -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}")
+            echo "API Response: $API_RESPONSE" | head -20 # Show first 20 lines for debugging
+            VERSION=$(echo "$API_RESPONSE" | jq -r '.tag_name' | sed 's/^v//')
+          fi
+          
+          echo "Extracted version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get Release ID (Debug Step 2)
+        id: get_release_id
+        run: |
+          RELEASE_TAG="v${VERSION}"
+          echo "Getting information for release: $RELEASE_TAG"
+          
+          RELEASE_API="https://api.github.com/repos/${{ github.repository }}/releases/tags/$RELEASE_TAG"
+          echo "API Endpoint: $RELEASE_API"
+          
+          RELEASE_DATA=$(curl -s "$RELEASE_API" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}")
+          echo "API Response first 20 lines:"
+          echo "$RELEASE_DATA" | head -20
+          
+          # Check if we got a proper response
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$RELEASE_API" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}")
+          echo "HTTP Status Code: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Error: Failed to get release data. HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi
+          
+          RELEASE_ID=$(echo "$RELEASE_DATA" | jq -r '.id')
+          echo "Release ID: $RELEASE_ID"
+          echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_OUTPUT
+          
+          # Save the body for later use
+          EXISTING_BODY=$(echo "$RELEASE_DATA" | jq -r '.body // ""')
+          echo "Existing body (first 100 chars):"
+          echo "$EXISTING_BODY" | head -c 100
+          echo
+          
+          # Store the body content in a file for inspection
+          echo "$EXISTING_BODY" > existing_body.txt
+          
+          echo "EXISTING_BODY=$EXISTING_BODY" >> $GITHUB_ENV
+
+      - name: Get All Assets (Debug Step 3)
+        id: get_assets
+        run: |
+          echo "Getting assets for release: v${VERSION}"
+          ASSETS_API="https://api.github.com/repos/${{ github.repository }}/releases/tags/v${VERSION}/assets"
+          
+          ASSETS_DATA=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${VERSION}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" | jq -r '.assets[] | "\(.name) \(.browser_download_url)"')
+          
+          # Check if we got any assets
+          if [ -z "$ASSETS_DATA" ]; then
+            echo "Warning: No assets found for the release"
+            # Create a minimal assets file for testing
+            echo "test-file.txt https://example.com/test-file.txt" > assets.txt
+          else
+            echo "Found $(echo "$ASSETS_DATA" | wc -l) assets"
+            echo "$ASSETS_DATA" > assets.txt
+          fi
+          
+          # List the first 5 assets for debugging
+          echo "First 5 assets:"
+          head -5 assets.txt
+          
+          # Make the assets available as an environment variable
+          echo "ASSETS<<EOF" >> $GITHUB_ENV
+          cat assets.txt >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Test Asset Categories (Debug Step 4)
+        id: create_test_categories
+        run: |
+          # Create a simplified version of the assets table in markdown
+          cat > test_assets.md << EOF
+          ## Binary Downloads
+          
+          ### Linux Binaries
+          | Package | SHA256 |
+          |---------|--------|
+          | [${{ env.PACKAGE_NAME }}-linux-x86_64.tar.gz](https://example.com/test) | [SHA256](https://example.com/test.sha256) |
+          
+          ### Windows Binaries
+          | Package | SHA256 |
+          |---------|--------|
+          | [${{ env.PACKAGE_NAME }}-windows-x86_64.zip](https://example.com/test) | [SHA256](https://example.com/test.sha256) |
+          
+          ## Package Downloads
+          
+          ### Debian/Ubuntu Packages (.deb)
+          | Package | SHA256 |
+          |---------|--------|
+          | [${{ env.PACKAGE_NAME }}_1.0.0_amd64.deb](https://example.com/test) | [SHA256](https://example.com/test.sha256) |
+          EOF
+          
+          echo "Created test assets file:"
+          cat test_assets.md
+
+      - name: Create Real Asset Categories
+        id: create_real_categories
+        run: |
+          # Process actual release assets
+          # Create function to generate category sections
+          generate_category() {
+            local category=$1
+            local pattern=$2
+            local title=$3
+            
+            echo "### $title"
+            echo ""
+            
+            # Filter assets matching the pattern and exclude checksums
+            matching_assets=$(grep -i "$pattern" assets.txt | grep -v "\.sha256$" | sort)
+            if [ -z "$matching_assets" ]; then
+              echo "No $category packages available."
+            else
+              echo "| Package | SHA256 |"
+              echo "|---------|--------|"
+              while read -r line; do
+                if [ -n "$line" ]; then
+                  name=$(echo "$line" | awk '{print $1}')
+                  url=$(echo "$line" | awk '{print $2}')
+                  # Look for corresponding SHA256 file
+                  sha_line=$(grep "${name}\.sha256" assets.txt || echo "")
+                  if [ -n "$sha_line" ]; then
+                    sha_url=$(echo "$sha_line" | awk '{print $2}')
+                    echo "| [$name]($url) | [SHA256]($sha_url) |"
+                  else
+                    echo "| [$name]($url) | N/A |"
+                  fi
+                fi
+              done <<< "$matching_assets"
+            fi
+            echo ""
+          }
+          
+          # Generate real assets markdown
+          {
+            echo "## Binary Downloads"
+            echo ""
+            generate_category "Linux" "linux" "Linux Binaries"
+            generate_category "Windows" "windows" "Windows Binaries"
+            generate_category "macOS" "macos" "macOS Binaries"
+            generate_category "FreeBSD" "freebsd" "FreeBSD Binaries"
+            generate_category "NetBSD" "netbsd" "NetBSD Binaries"
+            
+            echo "## Package Downloads"
+            echo ""
+            generate_category "Debian" "_amd64\.deb\|_arm64\.deb\|_i386\.deb" "Debian/Ubuntu Packages (.deb)"
+            generate_category "RPM" "\.rpm" "Red Hat/Fedora/SUSE Packages (.rpm)"
+            generate_category "AUR" "aur" "Arch Linux Package (AUR)"
+            generate_category "Homebrew" "homebrew" "macOS Homebrew Formula"
+            generate_category "DMG" "\.dmg" "macOS Disk Image (.dmg)"
+            generate_category "Nix" "nix" "Nix Packages"
+          } > real_assets.md
+          
+          echo "Created real assets content (first 20 lines):"
+          head -20 real_assets.md
+
+      - name: Combine Content (Debug Step 5)
+        id: combine_content
+        run: |
+          # Create a simplified combined body
+          if [ -n "$EXISTING_BODY" ]; then
+            echo "Using existing body and appending real content"
+            echo "$EXISTING_BODY" > combined_body.md
+            cat real_assets.md >> combined_body.md
+          else
+            echo "Creating a new body with version and real content"
+            echo "## ${{ env.PACKAGE_NAME }} v${VERSION}" > combined_body.md
+            echo "" >> combined_body.md
+            echo "${{ env.PACKAGE_DESCRIPTION }} ✂️" >> combined_body.md
+            echo "" >> combined_body.md
+            cat real_assets.md >> combined_body.md
+          fi
+          
+          echo "First 20 lines of combined body:"
+          head -20 combined_body.md
+          
+          # Escape the content for JSON
+          ESCAPED_CONTENT=$(cat combined_body.md | jq -Rs .)
+          echo "First 100 chars of escaped content:"
+          echo "$ESCAPED_CONTENT" | head -c 100
+          echo
+          
+          # Store in a file for the update step
+          echo "$ESCAPED_CONTENT" > escaped_content.json
+
+      - name: Update Release Description (Debug Step 6)
+        run: |
+          RELEASE_ID="${{ steps.get_release_id.outputs.RELEASE_ID }}"
+          
+          echo "Using minimal test update to verify API access"
+          echo "{\"body\": \"Test update from GitHub Actions - preparing real content...\"}" > test_payload.json
+          
+          echo "Sending test update to release ID: $RELEASE_ID"
+          HTTP_STATUS=$(curl -s -o update_response.txt -w "%{http_code}" \
+            -X PATCH \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+            -d @test_payload.json)
+          
+          echo "Update HTTP Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Test update successful"
+          else
+            echo "❌ Test update failed"
+            echo "Response:"
+            cat update_response.txt
+            exit 1
+          fi
+          
+      - name: Final Update With Assets
+        id: final_update
+        run: |
+          RELEASE_ID="${{ steps.get_release_id.outputs.RELEASE_ID }}"
+          ESCAPED_CONTENT=$(cat escaped_content.json)
+          
+          echo "Sending final update with full asset tables to release ID: $RELEASE_ID"
+          HTTP_STATUS=$(curl -s -o final_response.txt -w "%{http_code}" \
+            -X PATCH \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+            -d "{\"body\": ${ESCAPED_CONTENT}}")
+          
+          echo "Final update HTTP Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Release description successfully updated with all assets"
+          else
+            echo "❌ Final update failed"
+            echo "Response (first 500 chars):"
+            cat final_response.txt | head -c 500
+            exit 1
+          fi
+
+  # Add new Nix Package job
+  create-nix-package:
+    name: Create Nix Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION=${RELEASE_TAG#v}
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Get latest release tag
+            REPO="${GITHUB_REPOSITORY}"
+            GITHUB_API="https://api.github.com/repos/${REPO}/releases/latest"
+            VERSION=$(curl -s ${GITHUB_API} -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" | jq -r '.tag_name' | sed 's/^v//')
+            echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)"
+          echo "VERSION=$(cat $GITHUB_OUTPUT | grep VERSION | cut -d= -f2)" >> $GITHUB_ENV
+
+      - name: Download source code
+        run: |
+          mkdir -p nix-package
+          cd nix-package
+          curl -L "https://github.com/${{ github.repository }}/archive/refs/tags/v${{ env.VERSION }}.tar.gz" -o "${{ env.PACKAGE_NAME }}-${{ env.VERSION }}.tar.gz"
+          
+          # Calculate SHA256 sum
+          SOURCE_SHA256=$(sha256sum "${{ env.PACKAGE_NAME }}-${{ env.VERSION }}.tar.gz" | awk '{print $1}')
+          echo "SOURCE_SHA256=${SOURCE_SHA256}" >> $GITHUB_ENV
+
+      - name: Create Nix package file
+        id: create_nix
+        run: |
+          cd nix-package
+          
+          # Create default.nix
+          cat > default.nix << EOF
+          { pkgs ? import <nixpkgs> {} }:
+          
+          pkgs.rustPlatform.buildRustPackage rec {
+            pname = "${{ env.PACKAGE_NAME }}";
+            version = "${{ env.VERSION }}";
+          
+            src = pkgs.fetchFromGitHub {
+              owner = "Tuurlijk";
+              repo = "${{ env.PACKAGE_NAME }}";
+              rev = "v\${version}";
+              sha256 = "${{ env.SOURCE_SHA256 }}";
+            };
+          
+            cargoSha256 = "${{ env.SOURCE_SHA256 }}";
+          
+            meta = with pkgs.lib; {
+              description = "${{ env.PACKAGE_DESCRIPTION }}";
+              homepage = "${{ env.PACKAGE_HOMEPAGE }}";
+              license = licenses.mit;
+              maintainers = [ maintainers.tuurlijk ];
+              platforms = platforms.all;
+            };
+          }
+          EOF
+          
+          # Create a README for the nix package
+          cat > README.md << EOF
+          # Nix Package for ${{ env.PACKAGE_NAME }}
+          
+          This is a Nix package definition for ${{ env.PACKAGE_NAME }}, ${{ env.PACKAGE_DESCRIPTION }}.
+          
+          ## Installation
+          
+          ### Temporary installation
+          
+          \`\`\`
+          nix-shell -p 'import (builtins.fetchTarball "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ env.VERSION }}/${{ env.PACKAGE_NAME }}-nix-${{ env.VERSION }}.tar.gz") {}'
+          \`\`\`
+          
+          ### Permanent installation
+          
+          Add the following to your \`configuration.nix\`:
+          
+          \`\`\`nix
+          let
+            ${{ env.PACKAGE_NAME }} = import (builtins.fetchTarball "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ env.VERSION }}/${{ env.PACKAGE_NAME }}-nix-${{ env.VERSION }}.tar.gz") {};
+          in
+          {
+            environment.systemPackages = [ ${{ env.PACKAGE_NAME }} ];
+          }
+          \`\`\`
+          
+          Or for home-manager:
+          
+          \`\`\`nix
+          let
+            ${{ env.PACKAGE_NAME }} = import (builtins.fetchTarball "${{ env.PACKAGE_HOMEPAGE }}/releases/download/v${{ env.VERSION }}/${{ env.PACKAGE_NAME }}-nix-${{ env.VERSION }}.tar.gz") {};
+          in
+          {
+            home.packages = [ ${{ env.PACKAGE_NAME }} ];
+          }
+          \`\`\`
+          EOF
+          
+          # Create the tarball
+          NIX_FILENAME="${{ env.PACKAGE_NAME }}-nix-${{ env.VERSION }}.tar.gz"
+          tar -czf "$NIX_FILENAME" default.nix README.md
+          echo "NIX_FILENAME=$NIX_FILENAME" >> $GITHUB_OUTPUT
+          
+          # Create checksum
+          sha256sum "$NIX_FILENAME" > "${NIX_FILENAME}.sha256"
+
+      - name: Upload Nix package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            nix-package/${{ steps.create_nix.outputs.NIX_FILENAME }}
+            nix-package/${{ steps.create_nix.outputs.NIX_FILENAME }}.sha256
+          tag_name: v${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
