@@ -185,7 +185,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [MoneyBird](https://www.moneybird.com/) for providing the API
 - [Ratatui](https://github.com/ratatui-org/ratatui) for the amazing TUI framework
-- [Dennis Ameling](https://github.com/dennisameling/moneybird-openapi) for the original MoneyBird OpenAPI specification, which was trimmed using [mot](https://crates.io/crates/mot) for this project.
+- [Dennis Ameling](https://github.com/dennisameling/moneybird-openapi) for the original MoneyBird OpenAPI specification, which was trimmed using [apisnip](https://crates.io/crates/apisnip) for this project.
 - All contributors who have helped shape this project
 
 [mot.png]: https://github.com/Tuurlijk/mot/blob/images/images/mot.png?raw=true
