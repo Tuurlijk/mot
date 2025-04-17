@@ -51,11 +51,11 @@ dt_invalid_date: "Invalid date"
 dt_this_week: "this week"
 dt_last_week: "last week"
 dt_next_week: "next week"
-dt_weeks_ago: "%[count] weeks ago"
-dt_weeks_from_now: "%[count] weeks from now"
+dt_weeks_ago: "%{count} weeks ago"
+dt_weeks_from_now: "%{count} weeks from now"
 dt_duration_hour: "h"
 dt_duration_minute: "m"
-dt_week_description: "%[week_desc]: %[start_date] to %[end_date]"
+dt_week_description: "%{week_desc}: %{start_date} to %{end_date}"
 
 # UI - General
 ui_shortcut_week: "week"
@@ -75,7 +75,7 @@ ui_shortcut_select_user: "select user"
 ui_shortcut_exit_user_selection: "exit user selection"
 
 # UI - Detail View
-ui_detail_no_entries: "No time entries found for this week.\n\n%[week_description]"
+ui_detail_no_entries: "No time entries found for this week.\n\n%{week_description}"
 ui_detail_no_selection: "No item selected."
 ui_detail_invalid_selection: "Invalid selection index."
 

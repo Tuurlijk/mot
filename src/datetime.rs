@@ -179,7 +179,7 @@ pub fn get_title_week_description(week_offset: i32) -> String {
         let weeks_ago = format!(
             "{} {}",
             week_offset.abs(),
-            t!("dt_weeks_ago").replace("%[count]", "").trim()
+            t!("dt_weeks_ago").replace("%{count}", "").trim()
         );
         weeks_ago
     } else if week_offset == 1 {
@@ -188,7 +188,7 @@ pub fn get_title_week_description(week_offset: i32) -> String {
         let weeks_from_now = format!(
             "{} {}",
             week_offset,
-            t!("dt_weeks_from_now").replace("%[count]", "").trim()
+            t!("dt_weeks_from_now").replace("%{count}", "").trim()
         );
         weeks_from_now
     }

@@ -18,7 +18,7 @@ error_fetch_projects: "Waarschuwing: Ophalen van projecten mislukt: %{error}"
 # Success messages
 success_connection: "Succesvol verbonden met MoneyBird API"
 success_colors_initialized: "UI kleuren geïnitialiseerd"
-success_fetched_users: "%[count] gebruikers opgehaald."
+success_fetched_users: "%{count} gebruikers opgehaald."
 success_using_user_id: "Gebruik geconfigureerde gebruiker_id: %{user_id}"
 
 # Notice messages
@@ -51,11 +51,11 @@ dt_invalid_date: "Ongeldige datum"
 dt_this_week: "deze week"
 dt_last_week: "vorige week"
 dt_next_week: "volgende week"
-dt_weeks_ago: "%[count] weken geleden"
-dt_weeks_from_now: "%[count] weken vanaf nu"
+dt_weeks_ago: "%{count} weken geleden"
+dt_weeks_from_now: "%{count} weken vanaf nu"
 dt_duration_hour: "u"
 dt_duration_minute: "m"
-dt_week_description: "%[week_desc]: %[start_date] tot %[end_date]"
+dt_week_description: "%{week_desc}: %{start_date} tot %{end_date}"
 
 # UI - General
 ui_shortcut_week: "week"
@@ -75,7 +75,7 @@ ui_shortcut_select_user: "selecteer gebruiker"
 ui_shortcut_exit_user_selection: "sluit gebruikersselectie"
 
 # UI - Detail View
-ui_detail_no_entries: "Geen tijdinvoer gevonden voor deze week.\n\n%[week_description]"
+ui_detail_no_entries: "Geen tijdinvoer gevonden voor deze week.\n\n%{week_description}"
 ui_detail_no_selection: "Geen item geselecteerd."
 ui_detail_invalid_selection: "Ongeldige selectie-index."
 
@@ -217,7 +217,7 @@ file_exporting_for_week: "Tijdinvoeringen exporteren voor week: %{week_arg}"
 file_fetching_for_week: "Tijdinvoeringen ophalen voor week %{target_week}..."
 file_exporting_to_file: "Exporteren naar bestand: %{filename}"
 file_filtering_with_query: "Filteren met query: %{query_arg}"
-file_export_success: "Succesvol %[count] tijdinvoeringen geëxporteerd naar %[filename]"
+file_export_success: "Succesvol %{count} tijdinvoeringen geëxporteerd naar %{filename}"
 file_error_exporting: "Fout bij exporteren tijdinvoeringen: %{error}"
 file_export_failed: "Export mislukt: %{error}"
 file_error_create_file: "Kon bestand niet aanmaken: %{error}"
