@@ -53,11 +53,10 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
     // Split the area vertically to include shortcuts at the bottom
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(10), Constraint::Length(1)])
+        .constraints([Constraint::Min(10)])
         .split(inner_area);
 
     let content_area = chunks[0];
-    let shortcuts_area = chunks[1];
 
     // Split the content area into two sections: plugin list and plugin details
     let chunks = Layout::default()
