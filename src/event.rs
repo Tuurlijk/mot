@@ -31,6 +31,11 @@ pub enum Message {
     ExecuteDeleteTimeEntry(String),
     ExecuteExport,
 
+    PluginViewShow,
+    PluginViewHide,
+    PluginViewSelectNext,
+    PluginViewSelectPrevious,
+
     Quit,
 
     TimeEntryClearSearch,
@@ -160,6 +165,17 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             KeyCode::Up | KeyCode::Char('k') => return Some(Message::UserSelectPrevious),
             KeyCode::Down | KeyCode::Char('j') => return Some(Message::UserSelectNext),
             KeyCode::Enter => return Some(Message::UserConfirmSelection),
+            KeyCode::Char('q') => return Some(Message::Quit), // Allow quitting
+            _ => return None,                                 // Ignore other keys in this mode
+        }
+    }
+
+    // --- Plugin View Mode Handling ---
+    if model.plugin_view_state.active {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => return Some(Message::PluginViewSelectPrevious),
+            KeyCode::Down | KeyCode::Char('j') => return Some(Message::PluginViewSelectNext),
+            KeyCode::Esc | KeyCode::Char('p') => return Some(Message::PluginViewHide),
             KeyCode::Char('q') => return Some(Message::Quit), // Allow quitting
             _ => return None,                                 // Ignore other keys in this mode
         }
@@ -375,6 +391,7 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 KeyCode::Char('j') | KeyCode::Down => Some(Message::TimeEntrySelectNext),
                 KeyCode::Char('k') | KeyCode::Up => Some(Message::TimeEntrySelectPrevious),
                 KeyCode::Char('l') | KeyCode::Right => Some(Message::TimeEntryNextWeek),
+                KeyCode::Char('p') => Some(Message::PluginViewShow),
                 KeyCode::Char('q') => Some(Message::Quit),
                 KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
                     Some(Message::EditTimeEntry)

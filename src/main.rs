@@ -11,6 +11,7 @@ mod file;
 mod model;
 mod moneybird;
 mod moneybird_traits;
+mod plugin;
 mod tui;
 mod ui;
 mod update;
@@ -84,6 +85,23 @@ async fn main() -> color_eyre::Result<()> {
     // Initialize the application colors
     ui::color::setup_colors(&mut model.appearance);
     model.log_success(t!("success_colors_initialized"));
+
+    // Initialize plugin system
+    match plugin::PluginManager::new() {
+        Ok(mut manager) => {
+            if let Err(e) = manager.discover_plugins() {
+                model.log_warning(format!("Failed to discover plugins: {}", e));
+            } else {
+                if let Err(e) = manager.initialize_plugins() {
+                    model.log_warning(format!("Failed to initialize plugins: {}", e));
+                }
+            }
+            model.plugin_manager = Some(manager);
+        }
+        Err(e) => {
+            model.log_error(format!("Failed to create plugin manager: {}", e));
+        }
+    }
 
     // Try to get administration information if we have connectivity
     if !model.has_blocking_error() {
@@ -229,6 +247,12 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     // Clean up and exit
+    if let Some(plugin_manager) = model.plugin_manager.as_mut() {
+        if let Err(e) = plugin_manager.shutdown() {
+            model.log_error(format!("Error shutting down plugins: {}", e));
+        }
+    }
+    
     tui::restore_terminal()?;
     Ok(())
 }
@@ -255,6 +279,9 @@ fn view(model: &mut AppModel, frame: &mut Frame) {
     if model.user_selection_active {
         // If user selection is active, render the user selection list
         ui::render_user_selection(model, main_area, frame);
+    } else if model.plugin_view_state.active {
+        // If plugin view is active, render the plugins list
+        ui::render_plugins(model, main_area, frame);
     } else if model.edit_state.active {
         // When in edit mode, show the edit form
         ui::render_time_entry_edit(model, main_area, frame);

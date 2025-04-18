@@ -1058,5 +1058,58 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
+
+        // Plugin View Messages
+        Message::PluginViewShow => {
+            model.plugin_view_state.active = true;
+            // Select the first plugin if available
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                if !plugins.is_empty() {
+                    model.plugin_view_state.selected_index = Some(0);
+                }
+            }
+            None
+        }
+        Message::PluginViewHide => {
+            model.plugin_view_state.active = false;
+            None
+        }
+        Message::PluginViewSelectNext => {
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                if !plugins.is_empty() {
+                    if let Some(index) = model.plugin_view_state.selected_index {
+                        // Increment the index, wrapping around if necessary
+                        model.plugin_view_state.selected_index = Some((index + 1) % plugins.len());
+                    } else {
+                        // If no plugin is selected, select the first one
+                        model.plugin_view_state.selected_index = Some(0);
+                    }
+                }
+            }
+            None
+        }
+        Message::PluginViewSelectPrevious => {
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                if !plugins.is_empty() {
+                    if let Some(index) = model.plugin_view_state.selected_index {
+                        // Decrement the index, wrapping around if necessary
+                        model.plugin_view_state.selected_index = Some(
+                            if index == 0 {
+                                plugins.len() - 1
+                            } else {
+                                index - 1
+                            }
+                        );
+                    } else {
+                        // If no plugin is selected, select the first one
+                        model.plugin_view_state.selected_index = Some(0);
+                    }
+                }
+            }
+            None
+        }
     }
 }

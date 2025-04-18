@@ -16,17 +16,11 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         Shortcut::Pair("c", t!("ui_shortcut_create").as_ref()),
         Shortcut::Pair("e", t!("ui_shortcut_edit").as_ref()),
         Shortcut::Pair("d", t!("ui_shortcut_delete").as_ref()),
+        Shortcut::Pair("p", t!("ui_shortcut_plugins").as_ref()),
         Shortcut::Pair("x", t!("ui_shortcut_export").as_ref()),
         Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_key_style(
-        model
-            .appearance
-            .default_style
-            .green()
-            .add_modifier(Modifier::BOLD),
-    )
     .with_label_style(model.appearance.default_style);
 
     let collapsed_top_border_set = symbols::border::Set {
@@ -37,13 +31,13 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         ..symbols::border::PLAIN
     };
 
-    let detail_block = Block::default()
-        .borders(Borders::ALL)
+    let detail_block = model
+        .appearance
+        .default_block
+        .clone()
         .border_set(collapsed_top_border_set)
         .title_alignment(Alignment::Left)
-        .title_bottom(shortcuts.as_line())
-        .padding(Padding::new(1, 1, 0, 0))
-        .style(model.appearance.default_style);
+        .title_bottom(shortcuts.as_line());
 
     // Check if we have any items to display and a valid selection
     if model.time_entries_for_table.is_empty() || model.time_entry_table_state.selected().is_none()

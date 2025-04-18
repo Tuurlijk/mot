@@ -73,6 +73,7 @@ ui_shortcut_exit: "exit"
 ui_shortcut_clear: "clear"
 ui_shortcut_select_user: "select user"
 ui_shortcut_exit_user_selection: "exit user selection"
+ui_shortcut_plugin_view: "plugins"
 
 # UI - Detail View
 ui_detail_no_entries: "No time entries found for this week.\n\n%{week_description}"
@@ -80,20 +81,20 @@ ui_detail_no_selection: "No item selected."
 ui_detail_invalid_selection: "Invalid selection index."
 
 # UI - Edit View
-ui_edit_title_create: " Create Time Entry "
-ui_edit_title_edit: " Edit Time Entry "
+ui_edit_title_create: "Create Time Entry"
+ui_edit_title_edit: "Edit Time Entry"
 ui_edit_field_description: "Description"
-ui_edit_field_contact: " Contact "
-ui_edit_field_project: " Project "
-ui_edit_field_start_time: " Start time "
-ui_edit_field_end_time: " End time "
-ui_edit_field_start_date: " Start date "
-ui_edit_field_end_date: " End date "
+ui_edit_field_contact: "Contact"
+ui_edit_field_project: "Project"
+ui_edit_field_start_time: "Start time"
+ui_edit_field_end_time: "End time"
+ui_edit_field_start_date: "Start date"
+ui_edit_field_end_date: "End date"
 ui_edit_placeholder_contact: "Type to search contacts..."
 ui_edit_placeholder_project: "Type to search projects..."
 ui_edit_contact_empty: "Contact: Select contact..."
 ui_edit_project_empty: "Project: Select project..."
-ui_edit_icon_active: " ✏️ " # Icon for active field
+ui_edit_icon_active: " ✏️" # Icon for active field
 
 # UI - Search View
 # ui_search_title: " 🔍 " (Using shortcut label instead)
@@ -232,4 +233,28 @@ event_cancelling_modal: "Cancelling modal: %{modal_id} with key: %{key}"
 event_dismissing_modal: "Dismissing modal: %{modal_id} with key: %{key}"
 event_ignoring_unhandled_key: "Ignoring unhandled key (%{key}) in project/contact field"
 event_mouse_click_detected: "Mouse click detected on row: %{row}. Selected index: %{index}"
-event_toggle_log_panel: "Log panel toggled" 
+event_toggle_log_panel: "Log panel toggled"
+
+# Plugin system
+plugin_created_plugins_dir: "Created plugins directory: %{path}"
+plugin_loaded: "Loaded plugin: %{name}"
+plugin_load_failed: "Failed to load plugin from %{path}: %{error}"
+plugin_name_mismatch: "Plugin name '%{manifest_name}' doesn't match directory name '%{dir_name}'"
+plugin_initialized: "Initialized plugin: %{name}"
+plugin_init_failed: "Failed to initialize plugin %{name}: %{error}"
+plugin_init_error: "Error initializing plugin %{name}: %{error}"
+plugin_get_entries_error: "Error getting entries from %{name}: %{error}"
+plugin_shutdown_error: "Error shutting down plugin %{name}: %{error}"
+plugin_entries_loaded: "Loaded %{count} time entries from plugins"
+
+# UI - Plugin View
+ui_plugins_title: "Plugins"
+ui_plugins_list: "Available Plugins"
+ui_plugins_details: "Plugin Details"
+ui_no_plugins_found: "No plugins found. Check the plugins directory."
+ui_plugins_name: "Name"
+ui_plugins_version: "Version"
+ui_plugins_status: "Status"
+ui_plugins_description: "Description"
+ui_plugins_initialized: "Initialized"
+ui_plugins_not_initialized: "Not Initialized" 

@@ -419,6 +419,45 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                 .collect();
 
             model.time_entries_for_table_backup = model.time_entries_for_table.clone();
+            
+            // Load plugin entries if plugin system is available
+            if let Some(plugin_manager) = &mut model.plugin_manager {
+                // Calculate the week range dates in UTC
+                let (start, end) = datetime::calculate_week_range(
+                    model.week_offset,
+                    &admin_timezone_str,
+                    &model.config.week_starts_on,
+                );
+                
+                // Convert to UTC for plugin API
+                let start_utc = start.with_timezone(&chrono::Utc);
+                let end_utc = end.with_timezone(&chrono::Utc);
+                
+                // Get time entries from all plugins
+                match plugin_manager.get_all_time_entries(&start_utc, &end_utc) {
+                    Ok(plugin_entries) => {
+                        if !plugin_entries.is_empty() {
+                            model.log_notice(t!("plugin_entries_loaded", count = plugin_entries.len()));
+                            
+                            // Convert plugin entries to TimeEntryForTable
+                            let table_entries: Vec<TimeEntryForTable> = plugin_entries
+                                .into_iter()
+                                .map(TimeEntryForTable::from)
+                                .collect();
+                            
+                            // Store plugin entries
+                            model.plugin_entries = table_entries.clone();
+                            
+                            // Add plugin entries to regular entries
+                            model.time_entries_for_table.extend(table_entries);
+                            model.time_entries_for_table_backup = model.time_entries_for_table.clone();
+                        }
+                    }
+                    Err(e) => {
+                        model.log_error(format!("Failed to get plugin time entries: {}", e));
+                    }
+                }
+            }
 
             if model.search_state.active {
                 model.filter_items();

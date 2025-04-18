@@ -111,13 +111,6 @@ pub fn show_confirmation(
                     Shortcut::Pair("Esc", t!("modal_cancel").as_ref()),
                     Shortcut::Pair("Enter", t!("modal_ok").as_ref()),
                 ])
-                .with_key_style(
-                    model
-                        .appearance
-                        .default_style
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                )
                 .with_label_style(model.appearance.default_style),
             ),
             id: Some("confirmation".to_string()),
@@ -180,13 +173,6 @@ pub fn render_modal(model: &crate::AppModel, frame: &mut Frame) {
             "Enter",
             t!("modal_press_enter_to_dismiss").as_ref(),
         )])
-        .with_key_style(
-            model
-                .appearance
-                .default_style
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
         .with_label_style(model.appearance.default_style);
         let instructions = match &modal_data.buttons {
             Some(buttons) => buttons.as_line(),

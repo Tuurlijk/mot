@@ -142,13 +142,14 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
         let empty_state = Paragraph::new(empty_message)
             .alignment(Alignment::Center)
             .block(
-                Block::default()
+                model
+                    .appearance
+                    .default_block
+                    .clone()
                     .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                    .border_type(BorderType::Rounded)
                     .title(Line::from(title_spans))
                     .title_alignment(Alignment::Center)
-                    .padding(Padding::new(1, 1, 0, 0))
-                    .style(model.appearance.default_style),
+                    .padding(Padding::new(1, 1, 0, 0)),
             );
 
         frame.render_widget(empty_state, area);
@@ -157,16 +158,18 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
         let table = Table::new(rows, widths)
             .header(header)
             .row_highlight_style(
-                Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC),
+                Style::default()
+                    .add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD),
             )
             .block(
-                Block::default()
+                model
+                    .appearance
+                    .default_block
+                    .clone()
                     .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-                    .border_type(BorderType::Rounded)
                     .padding(Padding::new(1, 1, 0, 0))
                     .title(Line::from(title_spans.clone())) // Clone needed here
-                    .title_alignment(Alignment::Center)
-                    .style(model.appearance.default_style),
+                    .title_alignment(Alignment::Center),
             );
 
         frame.render_stateful_widget(table, area, &mut model.time_entry_table_state);

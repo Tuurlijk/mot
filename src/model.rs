@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::TableState,
+    widgets::{Block, BorderType, Borders, Padding, TableState},
 };
 use rust_i18n::t;
 use supports_color::ColorLevel;
@@ -66,6 +66,12 @@ pub(crate) struct SearchState {
 }
 
 #[derive(Clone, Default)]
+pub(crate) struct PluginViewState {
+    pub(crate) active: bool,
+    pub(crate) selected_index: Option<usize>,
+}
+
+#[derive(Clone, Default)]
 pub(crate) struct ModalStack {
     pub(crate) modals: Vec<ui::ModalData>,
 }
@@ -113,23 +119,24 @@ pub(crate) struct Appearance {
     pub(crate) default_foreground_color_dimmed: (u8, u8, u8),
     pub(crate) default_foreground_color_dimmed_indexed: Color,
     pub(crate) default_style: Style,
+    pub(crate) default_block: Block<'static>,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        let default_fg = (0, 0, 0); // Define the default color first
+        let default_fg = (0, 0, 0);
         Self {
             color_support: None,
             color_mode: Mode::Unspecified,
-            default_foreground_color: default_fg, // Use the defined value
-            default_foreground_color_indexed: Color::Indexed(ui::rgb_to_indexed(
-                default_fg, // Use the defined value here too
-            )),
+            default_foreground_color: default_fg,
+            default_foreground_color_indexed: Color::Indexed(ui::rgb_to_indexed(default_fg)),
             default_foreground_color_dimmed: (0, 0, 0),
-            default_foreground_color_dimmed_indexed: Color::Indexed(ui::rgb_to_indexed(
-                default_fg, // Use the defined value here too
-            )),
+            default_foreground_color_dimmed_indexed: Color::Indexed(ui::rgb_to_indexed(default_fg)),
             default_style: Style::default(),
+            default_block: Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .padding(Padding::new(1, 1, 0, 0)),
         }
     }
 }
@@ -395,6 +402,10 @@ pub(crate) struct AppModel {
     pub key_debounce: KeyDebounce,
     pub table_area: Option<Rect>,
     pub edit_form_area: Option<Rect>,
+    // Plugin system
+    pub plugin_manager: Option<crate::plugin::PluginManager>,
+    pub plugin_entries: Vec<TimeEntryForTable>,
+    pub plugin_view_state: PluginViewState,
 }
 
 impl Default for AppModel {
@@ -424,6 +435,9 @@ impl Default for AppModel {
             key_debounce: KeyDebounce::new(200),           // 200ms cooldown for keypresses
             table_area: None,
             edit_form_area: None,
+            plugin_manager: None,
+            plugin_entries: Vec::new(),
+            plugin_view_state: PluginViewState::default(),
         }
     }
 }

@@ -16,24 +16,13 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
         Shortcut::Pair("Esc", t!("ui_shortcut_exit_user_selection").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_key_style(
-        model
-            .appearance
-            .default_style
-            .green()
-            .add_modifier(Modifier::BOLD),
-    )
     .with_label_style(model.appearance.default_style);
 
-    let header_cells = [
-        Cell::from(t!("ui_user_id"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-        Cell::from(t!("ui_user_name"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-        Cell::from(t!("ui_user_email"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-    ];
-    let header = Row::new(header_cells).height(1).bottom_margin(1);
+    let header_cells = [t!("ui_user_id"), t!("ui_user_name"), t!("ui_user_email")];
+    let header = Row::new(header_cells)
+        .style(model.appearance.default_style.add_modifier(Modifier::BOLD))
+        .height(1)
+        .bottom_margin(1);
 
     let rows = model.users.iter().map(|user| {
         let item = [
@@ -71,7 +60,7 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
             .title_bottom(shortcuts.as_line())
             .style(model.appearance.default_style),
     )
-    .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC));
+    .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD));
 
     // Use a mutable borrow of the state
     let mut table_state = model.user_selection_state.clone();

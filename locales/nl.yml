@@ -73,6 +73,7 @@ ui_shortcut_exit: "sluit"
 ui_shortcut_clear: "wis"
 ui_shortcut_select_user: "selecteer gebruiker"
 ui_shortcut_exit_user_selection: "sluit gebruikersselectie"
+ui_shortcut_plugin_view: "plugins"
 
 # UI - Detail View
 ui_detail_no_entries: "Geen tijdinvoer gevonden voor deze week.\n\n%{week_description}"
@@ -80,20 +81,20 @@ ui_detail_no_selection: "Geen item geselecteerd."
 ui_detail_invalid_selection: "Ongeldige selectie-index."
 
 # UI - Edit View
-ui_edit_title_create: " Tijdinvoer Maken "
-ui_edit_title_edit: " Tijdinvoer Wijzigen "
+ui_edit_title_create: "Tijdinvoer Maken"
+ui_edit_title_edit: "Tijdinvoer Wijzigen"
 ui_edit_field_description: "Omschrijving"
-ui_edit_field_contact: " Contact "
-ui_edit_field_project: " Project "
-ui_edit_field_start_time: " Starttijd "
-ui_edit_field_end_time: " Eindtijd "
-ui_edit_field_start_date: " Startdatum "
-ui_edit_field_end_date: " Einddatum "
+ui_edit_field_contact: "Contact"
+ui_edit_field_project: "Project"
+ui_edit_field_start_time: "Starttijd"
+ui_edit_field_end_time: "Eindtijd"
+ui_edit_field_start_date: "Startdatum"
+ui_edit_field_end_date: "Einddatum"
 ui_edit_placeholder_contact: "Typ om contacten te zoeken..."
 ui_edit_placeholder_project: "Typ om projecten te zoeken..."
 ui_edit_contact_empty: "Contact: Selecteer contact..."
 ui_edit_project_empty: "Project: Selecteer project..."
-ui_edit_icon_active: " ✏️ " # Icon for active field
+ui_edit_icon_active: " ✏️" # Icon for active field
 
 # UI - Search View
 # ui_search_title: " 🔍 " (Using shortcut label instead)
@@ -232,4 +233,28 @@ event_cancelling_modal: "Modal annuleren: %{modal_id} met toets: %{key}"
 event_dismissing_modal: "Modal sluiten: %{modal_id} met toets: %{key}"
 event_ignoring_unhandled_key: "Negeren van onverwerkte toets (%{key}) in project/contact veld"
 event_mouse_click_detected: "Muisklik gedetecteerd op rij: %{row}. Geselecteerde index: %{index}"
-event_toggle_log_panel: "Logpaneel geschakeld" 
+event_toggle_log_panel: "Logpaneel geschakeld"
+
+# Plugin system
+plugin_created_plugins_dir: "Plugins directory gemaakt: %{path}"
+plugin_loaded: "Plugin geladen: %{name}"
+plugin_load_failed: "Kon plugin niet laden van %{path}: %{error}"
+plugin_name_mismatch: "Plugin naam '%{manifest_name}' komt niet overeen met directory naam '%{dir_name}'"
+plugin_initialized: "Plugin geïnitialiseerd: %{name}"
+plugin_init_failed: "Initialisatie van plugin %{name} mislukt: %{error}"
+plugin_init_error: "Fout bij initialiseren van plugin %{name}: %{error}"
+plugin_get_entries_error: "Fout bij ophalen van items van %{name}: %{error}"
+plugin_shutdown_error: "Fout bij afsluiten van plugin %{name}: %{error}"
+plugin_entries_loaded: "%{count} tijdregistraties geladen van plugins"
+
+# UI - Plugin View
+ui_plugins_title: "Plugins"
+ui_plugins_list: "Beschikbare Plugins"
+ui_plugins_details: "Plugin Details"
+ui_no_plugins_found: "Geen plugins gevonden. Controleer de plugins map."
+ui_plugins_name: "Naam"
+ui_plugins_version: "Versie"
+ui_plugins_status: "Status"
+ui_plugins_description: "Beschrijving"
+ui_plugins_initialized: "Geïnitialiseerd"
+ui_plugins_not_initialized: "Niet Geïnitialiseerd" 

@@ -13,6 +13,7 @@ A beautiful terminal-based interface for managing your MoneyBird time entries wi
 - 📆 Browse and navigate time entries by week
 - 🔄 Automatically refreshes data
 - 🧩 Connects directly to MoneyBird's API
+- 🔌 Plugin system for integrating with external tools
 - 🌙 Proper error handling with helpful messages
 - 🔐 Secure configuration for your API credentials
 - 🌓 Automatic detection of system theme (light/dark mode)
@@ -78,6 +79,41 @@ week_starts_on = "monday" # Options: monday, tuesday, wednesday, thursday, frida
 language = "en" # Options: en, nl (Optional, defaults to system language)
 ```
 
+## 🔌 Plugin System
+
+MOT includes a plugin system that allows integrating time entries from external sources. Plugins use a simple JSON-RPC protocol over stdin/stdout, making them easy to implement in any language.
+
+### Using Plugins
+
+- Press `p` in the main view to see loaded plugins
+- Time entries from plugins appear alongside regular MoneyBird entries
+- Plugin entries are visible but read-only
+
+### Plugin Location
+
+Plugins are discovered in:
+- Linux/macOS: `~/.config/mot/plugins/` 
+- Windows: `%APPDATA%\mot\plugins\`
+
+Each plugin should be in its own subdirectory with the required files:
+1. `manifest.toml` - Plugin metadata
+2. `config.toml` - Plugin configuration
+3. Executable - The plugin binary or script
+
+### Example Plugins
+
+The repository includes example plugins in various languages:
+
+```bash
+# Install the hello example plugin (Bash)
+examples/plugins/install-hello-plugin.sh
+
+# Install the Python example plugin
+examples/plugins/install-python-plugin.sh
+```
+
+For detailed plugin development information, see [docs/Plugins.md](docs/Plugins.md).
+
 ## 🌐 Localization
 
 MOT provides full internationalization support for all user-facing text:
@@ -104,6 +140,7 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 -   `r`: Refresh time entries
 -   `▲` / `k`: Move selection up
 -   `▼` / `j`: Move selection down
+-   `p`: View plugins
 -   `q`: Quit the application
 -   `F12`: Toggle log panel visibility
 
@@ -138,6 +175,13 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 -   **(Date/Time Fields)**
     -   `Enter`: Move to next field
 
+### Plugins View
+
+-   `↑` / `k`: Select previous plugin
+-   `↓` / `j`: Select next plugin
+-   `p` / `Esc`: Return to main view
+-   `q`: Quit the application
+
 ### User Selection (Initial Setup)
 
 -   `↑` / `k`: Select previous user
@@ -158,6 +202,7 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 - [x] Export filtered CSV for a given week number
 - [x] Internal logging + logging pane
 - [x] CRUD operations for time entries
+- [x] Plugin system for external time entries
 - [ ] Pull time logs from gitlab using dialogue
 - [ ] Contact browser
 - [ ] CRUD operations for contacts
