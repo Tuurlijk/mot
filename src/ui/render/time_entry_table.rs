@@ -1,4 +1,5 @@
-use crate::{datetime, AppModel};
+use crate::{datetime, AppModel, TimeEntryForTable};
+use crate::ui;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Modifier, Style};
@@ -7,11 +8,26 @@ use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Row, Tabl
 use ratatui::Frame;
 use rust_i18n::t;
 
+/// Get the display icon for a time entry
+fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
+    if let Some(custom_icon) = &time_entry.icon {
+        // Use custom icon from plugin manifest if available
+        custom_icon.clone()
+    } else if time_entry.source.to_lowercase() == "moneybird" {
+        // Use blue circle for Moneybird
+        "🔵".to_string()
+    } else {
+        // Use the centralized function for default icons
+        ui::get_default_icon(&time_entry.source)
+    }
+}
+
 pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     // Store the table area for mouse click handling
     model.table_area = Some(area);
 
     let header_cols = vec![
+        "".to_string(), // Empty header for the icon column
         t!("ui_table_header_date").to_string(),
         t!("ui_table_header_time").to_string(),
         t!("ui_table_header_client").to_string(),
@@ -117,7 +133,11 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
                 &admin_timezone_str,
             );
 
+            // Get the icon for this time entry
+            let icon = get_time_entry_icon(time_entry);
+
             Row::new(vec![
+                icon,
                 date,
                 time,
                 time_entry.customer.clone(),
@@ -129,6 +149,7 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
         .collect();
 
     let widths = [
+        Constraint::Length(2),                    // Icon column (small fixed width)
         Constraint::Length(10),                   // Date (YYYY-MM-DD)
         Constraint::Length(11),                   // Time range (HH:MM-HH:MM)
         Constraint::Length(client_width as u16),  // Client name

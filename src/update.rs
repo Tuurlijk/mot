@@ -637,6 +637,8 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                             .clone()
                                             .unwrap_or_default(),
                                         billable: updated_entry.billable.unwrap_or_default(),
+                                        source: "moneybird".to_string(),
+                                        icon: None,
                                     };
                                     if let Some(backup_index) = model
                                         .time_entries_for_table_backup

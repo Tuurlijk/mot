@@ -10,8 +10,45 @@ use rust_i18n::t;
 use crate::{
     model::AppModel,
     plugin::PluginInfo,
-    ui::{Shortcut, Shortcuts},
+    ui::{self, Shortcut, Shortcuts},
 };
+
+/// Helper function to get an icon for a plugin
+fn get_plugin_icon(plugin: &PluginInfo, default_style: Style) -> Span {
+    let icon_text = if let Some(icon) = &plugin.icon {
+        icon.clone()
+    } else {
+        // Use the centralized function for default icons
+        ui::get_default_icon(&plugin.name)
+    };
+    
+    Span::styled(format!("{} ", icon_text), default_style)
+}
+
+/// Get a status indicator span based on plugin initialization state
+fn get_status_span(initialized: bool) -> Span<'static> {
+    if initialized {
+        Span::styled(
+            " [✓] ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(
+            " [✗] ",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    }
+}
+
+/// Create a detail line with label and value
+fn create_detail_line<'a>(label: &'a str, value: &'a str, label_style: Style, value_style: Style) -> Line<'a> {
+    Line::from(vec![
+        Span::styled(format!("{}: ", label), label_style),
+        Span::styled(value, value_style),
+    ])
+}
 
 /// Render the plugins view
 pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame) {
@@ -64,35 +101,26 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(content_area);
 
-    // Create the plugin list
+    render_plugin_list(model, frame, chunks[0], &plugins);
+    render_plugin_details(model, frame, chunks[1], &plugins);
+}
+
+/// Render the list of plugins in the left panel
+fn render_plugin_list(model: &mut AppModel, frame: &mut Frame, area: Rect, plugins: &[PluginInfo]) {
+    // Create the plugin list items
     let items: Vec<ListItem> = plugins
         .iter()
-        .enumerate()
-        .map(|(_idx, plugin)| {
-            let status = if plugin.initialized {
-                Span::styled(
-                    " [✓] ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::styled(
-                    " [✗] ",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                )
-            };
-
+        .map(|plugin| {
+            let status = get_status_span(plugin.initialized);
+            let icon = get_plugin_icon(plugin, model.appearance.default_style);
             let name = Span::styled(&plugin.name, model.appearance.default_style);
-
             let version = Span::styled(
                 format!(" (v{})", plugin.version),
                 model.appearance.default_style.bold(),
             );
 
-            // Create a Line from spans
-            let spans = vec![status, name, version];
-            ListItem::new(Line::from(spans))
+            // Create a Line from spans, including icon
+            ListItem::new(Line::from(vec![status, icon, name, version]))
         })
         .collect();
 
@@ -117,13 +145,16 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
         state.select(Some(selected_idx));
 
         // Render the stateful list
-        frame.render_stateful_widget(plugin_list, chunks[0], &mut state);
+        frame.render_stateful_widget(plugin_list, area, &mut state);
     } else {
         // Render the list without selection
-        frame.render_widget(plugin_list, chunks[0]);
+        frame.render_widget(plugin_list, area);
     }
+}
 
-    // Show plugin details in the second chunk if a plugin is selected
+/// Render the details of the selected plugin in the right panel
+fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, plugins: &[PluginInfo]) {
+    // Show plugin details if a plugin is selected
     let selected_plugin = match &model.plugin_view_state.selected_index {
         Some(idx) if *idx < plugins.len() => Some(&plugins[*idx]),
         _ => None,
@@ -131,63 +162,78 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
 
     if let Some(plugin) = selected_plugin {
         let description = plugin.description.as_deref().unwrap_or_default();
-
-        // Format plugin details using Lines instead of Spans
+        let bold_style = Style::default().add_modifier(Modifier::BOLD);
         let mut detail_lines = Vec::new();
 
-        // Name line
-        let name_spans = vec![
-            Span::styled(
-                format!("{}: ", t!("ui_plugins_name")),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(&plugin.name),
-        ];
-        detail_lines.push(Line::from(name_spans));
+        // Get the icon as a string
+        let icon_display = if let Some(icon) = &plugin.icon {
+            icon.clone()
+        } else {
+            // Use the centralized function for default icons
+            ui::get_default_icon(&plugin.name)
+        };
 
-        // Version line
-        let version_spans = vec![
-            Span::styled(
-                format!("{}: ", t!("ui_plugins_version")),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(&plugin.version),
-        ];
-        detail_lines.push(Line::from(version_spans));
+        // Create translated labels as local variables to avoid temporary value issues
+        let icon_label = t!("ui_plugins_icon");
+        let name_label = t!("ui_plugins_name");
+        let version_label = t!("ui_plugins_version");
+        let status_label = t!("ui_plugins_status");
+        let description_label = t!("ui_plugins_description");
+        
+        // Status text
+        let status_text = if plugin.initialized {
+            t!("ui_plugins_initialized")
+        } else {
+            t!("ui_plugins_not_initialized")
+        };
 
-        // Status line
+        // Add detail lines
+        detail_lines.push(create_detail_line(
+            &icon_label,
+            &icon_display,
+            bold_style,
+            Style::default(),
+        ));
+        
+        detail_lines.push(create_detail_line(
+            &name_label, 
+            &plugin.name, 
+            bold_style, 
+            Style::default()
+        ));
+        
+        detail_lines.push(create_detail_line(
+            &version_label, 
+            &plugin.version, 
+            bold_style, 
+            Style::default()
+        ));
+
+        // Status line with special coloring
         let status_style = if plugin.initialized {
             Style::default().fg(Color::Green)
         } else {
             Style::default().fg(Color::Red)
         };
+        
+        detail_lines.push(create_detail_line(
+            &status_label,
+            &status_text,
+            bold_style,
+            status_style,
+        ));
 
-        let status_spans = vec![
-            Span::styled(
-                format!("{}: ", t!("ui_plugins_status")),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                if plugin.initialized {
-                    t!("ui_plugins_initialized")
-                } else {
-                    t!("ui_plugins_not_initialized")
-                },
-                status_style,
-            ),
-        ];
-        detail_lines.push(Line::from(status_spans));
-
-        // Description header
-        let desc_header = vec![Span::styled(
-            format!("{}: ", t!("ui_plugins_description")),
-            Style::default().add_modifier(Modifier::BOLD),
-        )];
-        detail_lines.push(Line::from(desc_header));
-
-        // Description content
+        // Description header and content
+        detail_lines.push(create_detail_line(
+            &description_label,
+            "",
+            bold_style,
+            Style::default(),
+        ));
+        
         detail_lines.push(Line::from(Span::raw(description)));
 
+        // Render the details widget
         let plugin_details = Paragraph::new(Text::from(detail_lines))
             .block(
                 model
@@ -198,6 +244,6 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
             )
             .wrap(Wrap { trim: true });
 
-        frame.render_widget(plugin_details, chunks[1]);
+        frame.render_widget(plugin_details, area);
     }
 }

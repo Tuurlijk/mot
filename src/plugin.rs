@@ -43,6 +43,8 @@ impl From<PluginTimeEntry> for TimeEntryForTable {
             project: entry.project_name.unwrap_or_else(|| "Unknown".to_string()),
             customer: entry.customer_name.unwrap_or_else(|| "Unknown".to_string()),
             billable: true,
+            icon: None,
+            source: entry.source.clone(),
         }
     }
 }
@@ -86,6 +88,7 @@ struct PluginManifestInfo {
     name: String,
     version: String,
     description: Option<String>,
+    icon: Option<String>,
 }
 
 /// Executable information from manifest
@@ -115,6 +118,7 @@ pub struct PluginInfo {
     pub version: String,
     pub description: Option<String>,
     pub initialized: bool,
+    pub icon: Option<String>,
 }
 
 /// Loaded plugin instance
@@ -202,11 +206,14 @@ impl PluginManager {
     }
     
     /// Scan the plugins directory and load available plugins
-    pub fn discover_plugins(&mut self) -> eyre::Result<()> {
+    pub fn discover_plugins(&mut self) -> eyre::Result<Vec<(String, Result<String, String>)>> {
+        let mut results = Vec::new();
+        
         if !self.plugins_dir.exists() {
             fs::create_dir_all(&self.plugins_dir)?;
-            println!("{}", t!("plugin_created_plugins_dir", path = format!("{:?}", self.plugins_dir)));
-            return Ok(());
+            results.push((self.plugins_dir.to_string_lossy().to_string(), 
+                          Ok(t!("plugin_created_plugins_dir", path = format!("{:?}", self.plugins_dir)).to_string())));
+            return Ok(results);
         }
         
         for entry in fs::read_dir(&self.plugins_dir)? {
@@ -216,16 +223,18 @@ impl PluginManager {
             if path.is_dir() {
                 match self.load_plugin(&path) {
                     Ok(plugin_name) => {
-                        println!("{}", t!("plugin_loaded", name = plugin_name));
+                        results.push((path.to_string_lossy().to_string(), 
+                                     Ok(t!("plugin_loaded", name = plugin_name).to_string())));
                     }
                     Err(err) => {
-                        println!("{}", t!("plugin_load_failed", path = format!("{:?}", path), error = err.to_string()));
+                        results.push((path.to_string_lossy().to_string(), 
+                                     Err(t!("plugin_load_failed", path = format!("{:?}", path), error = err.to_string()).to_string())));
                     }
                 }
             }
         }
         
-        Ok(())
+        Ok(results)
     }
     
     /// Load a plugin from a directory
@@ -294,6 +303,7 @@ impl PluginManager {
             version: manifest.plugin.version.clone(),
             description: manifest.plugin.description.clone(),
             initialized: false,
+            icon: manifest.plugin.icon.clone(),
         };
         
         // Create plugin instance
@@ -311,8 +321,9 @@ impl PluginManager {
     }
     
     /// Initialize all loaded plugins
-    pub fn initialize_plugins(&mut self) -> eyre::Result<()> {
+    pub fn initialize_plugins(&mut self) -> eyre::Result<Vec<(String, Result<(), String>)>> {
         let plugins_to_init: Vec<String> = self.plugins.keys().cloned().collect();
+        let mut results = Vec::new();
         
         for plugin_name in plugins_to_init {
             if let Some(plugin) = self.plugins.get_mut(&plugin_name) {
@@ -329,20 +340,23 @@ impl PluginManager {
                 match plugin.send_request("initialize", params) {
                     Ok(response) => {
                         if let Some(error) = response.error {
-                            println!("{}", t!("plugin_init_failed", name = plugin_name, error = error.message));
+                            results.push((plugin_name.clone(), 
+                                         Err(t!("plugin_init_failed", name = plugin_name, error = error.message).to_string())));
                         } else {
                             plugin.info.initialized = true;
-                            println!("{}", t!("plugin_initialized", name = plugin_name));
+                            results.push((plugin_name.clone(), 
+                                         Ok(())));
                         }
                     }
                     Err(err) => {
-                        println!("{}", t!("plugin_init_error", name = plugin_name, error = err.to_string()));
+                        results.push((plugin_name.clone(), 
+                                     Err(t!("plugin_init_error", name = plugin_name, error = err.to_string()).to_string())));
                     }
                 }
             }
         }
         
-        Ok(())
+        Ok(results)
     }
     
     /// Get time entries from a specific plugin
@@ -379,8 +393,9 @@ impl PluginManager {
     /// Get time entries from all plugins for a date range
     pub fn get_all_time_entries(&mut self, 
                               start_date: &DateTime<Utc>, 
-                              end_date: &DateTime<Utc>) -> eyre::Result<Vec<PluginTimeEntry>> {
+                              end_date: &DateTime<Utc>) -> eyre::Result<(Vec<PluginTimeEntry>, Vec<(String, String)>)> {
         let mut all_entries = Vec::new();
+        let mut errors = Vec::new();
         let plugin_names: Vec<String> = self.plugins.keys().cloned().collect();
         
         for plugin_name in plugin_names {
@@ -389,24 +404,28 @@ impl PluginManager {
                     all_entries.extend(entries);
                 }
                 Err(err) => {
-                    println!("{}", t!("plugin_get_entries_error", name = plugin_name, error = err.to_string()));
+                    errors.push((plugin_name.clone(), 
+                                t!("plugin_get_entries_error", name = plugin_name, error = err.to_string()).to_string()));
                 }
             }
         }
         
-        Ok(all_entries)
+        Ok((all_entries, errors))
     }
     
     /// Shutdown all plugins
-    pub fn shutdown(&mut self) -> eyre::Result<()> {
+    pub fn shutdown(&mut self) -> eyre::Result<Vec<(String, String)>> {
+        let mut errors = Vec::new();
+        
         for (name, plugin) in self.plugins.iter_mut() {
             if let Err(e) = plugin.shutdown() {
-                println!("{}", t!("plugin_shutdown_error", name = name, error = e.to_string()));
+                errors.push((name.clone(), 
+                            t!("plugin_shutdown_error", name = name, error = e.to_string()).to_string()));
             }
         }
         
         self.plugins.clear();
-        Ok(())
+        Ok(errors)
     }
     
     /// Get a list of loaded plugin information

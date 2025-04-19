@@ -2,6 +2,7 @@ use crate::config::Configuration;
 use crate::moneybird::types::{Contact, Project, TimeEntry, User};
 use crate::moneybird::{self, types::Administration};
 use crate::{datetime, AppModel, TimeEntryForTable};
+use crate::plugin::PluginInfo;
 use color_eyre::eyre::Result;
 use reqwest::Response;
 use rust_i18n::t;
@@ -415,6 +416,8 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                     started_at: entry.started_at.clone().unwrap_or_default(),
                     ended_at: entry.ended_at.clone().unwrap_or_default(),
                     billable: entry.billable.unwrap_or_default(),
+                    source: "moneybird".to_string(),
+                    icon: None,
                 })
                 .collect();
 
@@ -435,15 +438,26 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                 
                 // Get time entries from all plugins
                 match plugin_manager.get_all_time_entries(&start_utc, &end_utc) {
-                    Ok(plugin_entries) => {
+                    Ok((plugin_entries, errors)) => {
+                        // First, store the plugin errors for later
+                        let plugin_errors = errors;
+                        
+                        // Process plugin entries if we have any
                         if !plugin_entries.is_empty() {
-                            model.log_notice(t!("plugin_entries_loaded", count = plugin_entries.len()));
-                            
                             // Convert plugin entries to TimeEntryForTable
-                            let table_entries: Vec<TimeEntryForTable> = plugin_entries
+                            let mut table_entries: Vec<TimeEntryForTable> = plugin_entries
                                 .into_iter()
                                 .map(TimeEntryForTable::from)
                                 .collect();
+                            
+                            // Get the plugin info list once
+                            let plugin_infos = plugin_manager.list_plugins();
+                            
+                            // Apply icons to the entries
+                            apply_plugin_icons(model, &mut table_entries, &plugin_infos);
+                            
+                            // Log after updating the entries
+                            model.log_notice(t!("plugin_entries_loaded", count = table_entries.len()));
                             
                             // Store plugin entries
                             model.plugin_entries = table_entries.clone();
@@ -452,9 +466,20 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                             model.time_entries_for_table.extend(table_entries);
                             model.time_entries_for_table_backup = model.time_entries_for_table.clone();
                         }
+                        
+                        // Now process any errors
+                        for (plugin_name, error_msg) in plugin_errors {
+                            model.log_error(error_msg.clone());
+                            crate::ui::show_error(
+                                model, 
+                                t!("plugin_error", name = plugin_name, error = error_msg),
+                            );
+                        }
                     }
                     Err(e) => {
-                        model.log_error(format!("Failed to get plugin time entries: {}", e));
+                        let error_msg = format!("Failed to get plugin time entries: {}", e);
+                        model.log_error(error_msg.clone());
+                        crate::ui::show_error(model, error_msg);
                     }
                 }
             }
@@ -761,6 +786,55 @@ pub(crate) async fn get_all_users(
             );
             handle_moneybird_error(err, &context, endpoint, "GET", administration_id).await?;
             unreachable!();
+        }
+    }
+}
+
+/// Normalizes a string for plugin name matching by converting to lowercase and removing spaces/hyphens
+fn normalize_string_for_matching(input: &str) -> String {
+    input.to_lowercase()
+        .replace(' ', "")
+        .replace('-', "")
+}
+
+/// Checks if a plugin matches a source based on normalized string comparison
+fn plugin_matches_source(plugin_name: &str, source: &str) -> bool {
+    // Normalize both strings
+    let source_normalized = normalize_string_for_matching(source);
+    let plugin_name_normalized = normalize_string_for_matching(plugin_name);
+    
+    // Check all matching conditions
+    source_normalized.contains(&plugin_name_normalized) || 
+    plugin_name_normalized.contains(&source_normalized) ||
+    // Also check with the original strings for backward compatibility
+    source.to_lowercase().contains(&plugin_name.to_lowercase()) || 
+    plugin_name.to_lowercase().contains(&source.to_lowercase())
+}
+
+/// Apply plugin icons to time entries based on their source
+fn apply_plugin_icons(model: &mut AppModel, entries: &mut [TimeEntryForTable], plugin_infos: &[PluginInfo]) {
+    for entry in entries {
+        // Add debug logging to see source names and plugin names
+        model.log_debug(format!("Entry source: '{}', looking for matching plugin", entry.source));
+        
+        // Try to find a matching plugin
+        let mut matched = false;
+        for plugin_info in plugin_infos {
+            // Log each plugin we're checking against
+            model.log_debug(format!("Checking plugin: '{}' with icon: {:?}", 
+                              plugin_info.name, plugin_info.icon));
+            
+            if plugin_matches_source(&plugin_info.name, &entry.source) {
+                entry.icon = plugin_info.icon.clone();
+                model.log_debug(format!("Matched! Source: '{}' with plugin: '{}', icon: {:?}", 
+                                 entry.source, plugin_info.name, entry.icon));
+                matched = true;
+                break;
+            }
+        }
+        
+        if !matched {
+            model.log_debug(format!("No matching plugin found for source: '{}'", entry.source));
         }
     }
 }

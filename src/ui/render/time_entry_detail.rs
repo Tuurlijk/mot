@@ -1,5 +1,5 @@
 use crate::ui::Shortcut;
-use crate::{datetime, ui::Shortcuts, AppModel};
+use crate::{datetime, ui, ui::Shortcuts, AppModel, TimeEntryForTable};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Modifier, Style};
@@ -7,6 +7,20 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 use ratatui::{symbols, Frame};
 use rust_i18n::t;
+
+/// Get the display icon for a time entry
+fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
+    if let Some(custom_icon) = &time_entry.icon {
+        // Use custom icon from plugin manifest if available
+        custom_icon.clone()
+    } else if time_entry.source.to_lowercase() == "moneybird" {
+        // Use blue circle for Moneybird 
+        "🔵".to_string()
+    } else {
+        // Use the centralized function for default icons
+        ui::get_default_icon(&time_entry.source)
+    }
+}
 
 pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame) {
     let shortcuts = Shortcuts::new(vec![
@@ -75,6 +89,9 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
 
     let selected_item = &model.time_entries_for_table[selected_idx];
 
+    // Get the icon to display
+    let icon_display = get_time_entry_icon(selected_item);
+
     let client_project = vec![
         selected_item.customer.clone().green(),
         Span::from(" - "),
@@ -118,8 +135,20 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         ),
     ));
 
-    let mut title_spans = vec![Span::from(" ")];
+    let mut title_spans = vec![
+        Span::from(" "),
+        Span::from(icon_display),
+        Span::from(" "),
+    ];
     title_spans.extend(client_project.clone());
+    
+    // Add source information if not from Moneybird
+    if selected_item.source.to_lowercase() != "moneybird" {
+        title_spans.push(Span::from(" ("));
+        title_spans.push(Span::from(&selected_item.source).italic());
+        title_spans.push(Span::from(")"));
+    }
+    
     title_spans.push(Span::from(" "));
 
     let mut detail_lines: Vec<Line> = vec![Line::from(times), Line::from("")];

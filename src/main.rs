@@ -87,20 +87,36 @@ async fn main() -> color_eyre::Result<()> {
     model.log_success(t!("success_colors_initialized"));
 
     // Initialize plugin system
-    match plugin::PluginManager::new() {
-        Ok(mut manager) => {
-            if let Err(e) = manager.discover_plugins() {
-                model.log_warning(format!("Failed to discover plugins: {}", e));
-            } else {
-                if let Err(e) = manager.initialize_plugins() {
-                    model.log_warning(format!("Failed to initialize plugins: {}", e));
+    if let Ok(mut manager) = plugin::PluginManager::new() {
+        // Discover plugins
+        let discover_results = manager.discover_plugins()?;
+        
+        // Display results
+        if discover_results.is_empty() {
+            println!("No plugins found or loaded");
+        } else {
+            for (_path, result) in discover_results {
+                match result {
+                    Ok(msg) => println!("✅ {}", msg),
+                    Err(err) => println!("❌ {}", err),
                 }
             }
-            model.plugin_manager = Some(manager);
         }
-        Err(e) => {
-            model.log_error(format!("Failed to create plugin manager: {}", e));
+        
+        // Initialize the plugins
+        let init_results = manager.initialize_plugins()?;
+        
+        // Display initialization results
+        for (plugin_name, result) in init_results {
+            match result {
+                Ok(_) => println!("✅ Initialized plugin: {}", plugin_name),
+                Err(err) => println!("❌ Failed to initialize plugin {}: {}", plugin_name, err),
+            }
         }
+        
+        model.plugin_manager = Some(manager);
+    } else {
+        println!("Plugin system not available");
     }
 
     // Try to get administration information if we have connectivity
@@ -248,8 +264,17 @@ async fn main() -> color_eyre::Result<()> {
 
     // Clean up and exit
     if let Some(plugin_manager) = model.plugin_manager.as_mut() {
-        if let Err(e) = plugin_manager.shutdown() {
-            model.log_error(format!("Error shutting down plugins: {}", e));
+        match plugin_manager.shutdown() {
+            Ok(errors) => {
+                // Handle any shutdown errors
+                for (plugin_name, error_msg) in errors {
+                    model.log_error(format!("Error shutting down plugin {}: {}", plugin_name, error_msg));
+                    // We can't show modals after terminal restore, so just log the errors
+                }
+            },
+            Err(e) => {
+                model.log_error(format!("Error shutting down plugins: {}", e));
+            }
         }
     }
     

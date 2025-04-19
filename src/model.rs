@@ -206,6 +206,8 @@ pub(crate) struct TimeEntryForTable {
     pub started_at: String,
     pub ended_at: String,
     pub billable: bool,
+    pub source: String, // Plugin name or "moneybird"
+    pub icon: Option<String>, // Custom icon from plugin manifest
 }
 
 #[derive(Clone, Debug, Default)]

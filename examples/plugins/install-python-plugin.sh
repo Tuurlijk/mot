@@ -16,6 +16,7 @@ cat > "$CONFIG_DIR/manifest.toml" << 'EOF'
 name = "python-example"
 version = "0.1.0"
 description = "Example Python plugin for mot"
+icon = "🐍"  # Snake emoji will be displayed in the time entry table
 
 [executable]
 default = "python-plugin.py"

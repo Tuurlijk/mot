@@ -20,6 +20,8 @@ import os.path
 name = "python-example"
 version = "0.1.0"
 description = "Example Python plugin for mot"
+# The icon will be displayed in the time entry table
+icon = "🐍"
 
 [executable]
 default = "python-plugin.py"

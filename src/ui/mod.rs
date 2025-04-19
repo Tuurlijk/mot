@@ -65,3 +65,33 @@ pub(crate) fn get_contact_name(
         None => t!("ui_undefined").to_string(),
     }
 }
+
+/// Generate a default icon based on a name, ensuring consistency across the application
+pub fn get_default_icon(name: &str) -> String {
+    // Available default icons (colored circles)
+    let plugin_icons = ["🔴", "⚪", "🟡", "🟠", "🟢"];
+    
+    // Normalize the string more aggressively to handle similar names
+    // 1. Convert to lowercase
+    // 2. Remove spaces, hyphens, and underscores
+    // 3. Keep only alphanumeric characters
+    let normalized_name = name.to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>();
+    
+    // For very short normalized names (like "h"), use a more stable approach
+    let hash = if normalized_name.len() <= 2 {
+        // Use first letter as index for very short names
+        if let Some(c) = normalized_name.chars().next() {
+            (c as usize) % plugin_icons.len()
+        } else {
+            0 // Default to first icon if empty
+        }
+    } else {
+        // For longer names, use a hash of the entire normalized string
+        normalized_name.chars().fold(0, |acc, c| acc + c as usize) % plugin_icons.len()
+    };
+    
+    plugin_icons[hash].to_string()
+}
