@@ -571,10 +571,11 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if model.time_entries_for_table.is_empty() {
                 return None;
             }
-
             let current_index = model.time_entry_table_state.selected().unwrap_or(0);
+            // Only select next if not already at the last item
             if current_index < model.time_entries_for_table.len() - 1 {
-                model.time_entry_table_state.select(Some(current_index + 1));
+                let next_index = current_index + 1;
+                model.time_entry_table_state.select(Some(next_index));
             }
             None
         }
@@ -583,10 +584,11 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if model.time_entries_for_table.is_empty() {
                 return None;
             }
-
             let current_index = model.time_entry_table_state.selected().unwrap_or(0);
+            // Only select previous if not already at the first item
             if current_index > 0 {
-                model.time_entry_table_state.select(Some(current_index - 1));
+                let prev_index = current_index - 1;
+                model.time_entry_table_state.select(Some(prev_index));
             }
             None
         }
@@ -1314,12 +1316,11 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         Message::UserSelectNext => {
             if !model.users.is_empty() {
                 let current_index = model.user_selection_state.selected().unwrap_or(0);
-                let next_index = if current_index >= model.users.len() - 1 {
-                    0
-                } else {
-                    current_index + 1
-                };
-                model.user_selection_state.select(Some(next_index));
+                // Only select next if not already at the last item
+                if current_index < model.users.len() - 1 {
+                    let next_index = current_index + 1;
+                    model.user_selection_state.select(Some(next_index));
+                }
             }
             None
         }
@@ -1327,12 +1328,11 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         Message::UserSelectPrevious => {
             if !model.users.is_empty() {
                 let current_index = model.user_selection_state.selected().unwrap_or(0);
-                let prev_index = if current_index == 0 {
-                    model.users.len() - 1
-                } else {
-                    current_index - 1
-                };
-                model.user_selection_state.select(Some(prev_index));
+                // Only select previous if not already at the first item
+                if current_index > 0 {
+                    let prev_index = current_index - 1;
+                    model.user_selection_state.select(Some(prev_index));
+                }
             }
             None
         }
@@ -1428,11 +1428,23 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         // Plugin View Messages
         Message::PluginViewShow => {
             model.plugin_view_state.active = true;
-            // Select the first plugin if available
+            // Initialize selection state when showing the view
             if let Some(plugin_manager) = &model.plugin_manager {
                 let plugins = plugin_manager.list_plugins();
                 if !plugins.is_empty() {
-                    model.plugin_view_state.selected_index = Some(0);
+                    // Select first item if nothing is selected or selection is out of bounds
+                    if model.plugin_view_state.plugin_list_state.selected().is_none() ||
+                       model.plugin_view_state.plugin_list_state.selected().unwrap_or(0) >= plugins.len() {
+                        model.plugin_view_state.plugin_list_state.select(Some(0));
+                        model.plugin_view_state.selected_index = Some(0);
+                    } else {
+                        // Ensure selected_index is synced with list_state
+                         model.plugin_view_state.selected_index = model.plugin_view_state.plugin_list_state.selected();
+                    }
+                } else {
+                    // No plugins, clear selection
+                    model.plugin_view_state.plugin_list_state.select(None);
+                    model.plugin_view_state.selected_index = None;
                 }
             }
             None
@@ -1445,12 +1457,12 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if let Some(plugin_manager) = &model.plugin_manager {
                 let plugins = plugin_manager.list_plugins();
                 if !plugins.is_empty() {
-                    if let Some(index) = model.plugin_view_state.selected_index {
-                        // Increment the index, wrapping around if necessary
-                        model.plugin_view_state.selected_index = Some((index + 1) % plugins.len());
-                    } else {
-                        // If no plugin is selected, select the first one
-                        model.plugin_view_state.selected_index = Some(0);
+                    let current_index = model.plugin_view_state.plugin_list_state.selected().unwrap_or(0);
+                    // Only select next if not already at the last item
+                    if current_index < plugins.len() - 1 {
+                        let next_index = current_index + 1;
+                        model.plugin_view_state.plugin_list_state.select(Some(next_index));
+                        model.plugin_view_state.selected_index = Some(next_index); // Keep selected_index synced
                     }
                 }
             }
@@ -1460,19 +1472,33 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if let Some(plugin_manager) = &model.plugin_manager {
                 let plugins = plugin_manager.list_plugins();
                 if !plugins.is_empty() {
-                    if let Some(index) = model.plugin_view_state.selected_index {
-                        // Decrement the index, wrapping around if necessary
-                        model.plugin_view_state.selected_index = Some(
-                            if index == 0 {
-                                plugins.len() - 1
-                            } else {
-                                index - 1
-                            }
-                        );
-                    } else {
-                        // If no plugin is selected, select the first one
-                        model.plugin_view_state.selected_index = Some(0);
+                    let current_index = model.plugin_view_state.plugin_list_state.selected().unwrap_or(0);
+                    // Only select previous if not already at the first item
+                    if current_index > 0 {
+                        let prev_index = current_index - 1;
+                        model.plugin_view_state.plugin_list_state.select(Some(prev_index));
+                        model.plugin_view_state.selected_index = Some(prev_index); // Keep selected_index synced
                     }
+                }
+            }
+            None
+        }
+        Message::PluginViewSelectRow(index) => {
+             if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                // Check if index is valid
+                if index < plugins.len() {
+                    model.plugin_view_state.plugin_list_state.select(Some(index));
+                    model.plugin_view_state.selected_index = Some(index); // Keep selected_index synced
+                } else {
+                    // Log if index is out of bounds, maybe select last item?
+                    model.log_warning(format!("PluginViewSelectRow: Index {} out of bounds ({} plugins)", index, plugins.len()));
+                    // Optionally select the last item if index is invalid
+                    // if !plugins.is_empty() {
+                    //     let last_index = plugins.len() - 1;
+                    //     model.plugin_view_state.plugin_list_state.select(Some(last_index));
+                    //     model.plugin_view_state.selected_index = Some(last_index);
+                    // }
                 }
             }
             None

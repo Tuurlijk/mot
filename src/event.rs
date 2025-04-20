@@ -39,6 +39,7 @@ pub enum Message {
     PluginViewHide,
     PluginViewSelectNext,
     PluginViewSelectPrevious,
+    PluginViewSelectRow(usize),
 
     Quit,
 
@@ -436,6 +437,47 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
 
         // Click was in edit mode but not on any field
         return None;
+    }
+
+    // Handle plugin view mouse events
+    if model.plugin_view_state.active {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => return Some(Message::PluginViewSelectPrevious),
+            MouseEventKind::ScrollUp => return Some(Message::PluginViewSelectNext),
+            MouseEventKind::Down(event::MouseButton::Left) => {
+                if let Some(list_area) = model.plugin_list_area {
+                    if list_area.contains(ratatui::layout::Position { x: mouse.column, y: mouse.row }) {
+                        // Adjust for list border/padding if necessary (assuming 1 row top border/padding)
+                        let relative_row = mouse.row.saturating_sub(list_area.y + 1);
+                        // Calculate index based on scroll offset and relative row
+                        let selected_index = model.plugin_view_state.plugin_list_state.offset() + relative_row as usize;
+
+                        // TODO: Check if index is within bounds (requires knowing list length here)
+                        //       We might need to pass list length or handle bounds check in update.rs
+                        model.log_debug(t!(
+                            "event_mouse_click_detected_plugin",
+                            row = relative_row.to_string(),
+                            index = selected_index.to_string()
+                        ));
+                        return Some(Message::PluginViewSelectRow(selected_index));
+                    }
+                }
+                return None; // Click outside list area
+            }
+            _ => return None, // Ignore other mouse events in plugin view
+        }
+    }
+
+    // Handle user selection view mouse events
+    if model.user_selection_active {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => return Some(Message::UserSelectPrevious),
+            MouseEventKind::ScrollUp => return Some(Message::UserSelectNext),
+            MouseEventKind::Down(event::MouseButton::Left) => {
+                return None;
+            }
+            _ => return None, // Ignore other mouse events in user selection view
+        }
     }
 
     // Handle normal mode clicks time entry table

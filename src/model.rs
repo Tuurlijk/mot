@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, BorderType, Borders, Padding, TableState},
+    widgets::{Block, BorderType, Borders, Padding, TableState, ListState},
 };
 use rust_i18n::t;
 use supports_color::ColorLevel;
@@ -65,10 +65,21 @@ pub(crate) struct SearchState {
     pub(crate) text_input: TextArea<'static>,
 }
 
-#[derive(Clone, Default)]
-pub(crate) struct PluginViewState {
-    pub(crate) active: bool,
-    pub(crate) selected_index: Option<usize>,
+#[derive(Debug, Clone)]
+pub struct PluginViewState {
+    pub active: bool,
+    pub selected_index: Option<usize>,
+    pub plugin_list_state: ListState,
+}
+
+impl Default for PluginViewState {
+    fn default() -> Self {
+        Self {
+            active: false,
+            selected_index: None,
+            plugin_list_state: ListState::default(),
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -404,7 +415,7 @@ pub(crate) struct AppModel {
     pub contacts: Vec<Contact>,
     pub users: Vec<User>,
     pub user_selection_active: bool,
-    pub user_selection_state: TableState,
+    pub user_selection_state: ListState,
     pub search_state: SearchState,
     pub appearance: Appearance,
     pub week_offset: i32, // How many weeks from current (0 = current, -1 = previous, 1 = next)
@@ -422,6 +433,7 @@ pub(crate) struct AppModel {
     pub plugin_view_state: PluginViewState,
     // Import state (for importing plugin entries to Moneybird)
     pub import_state: ImportState,
+    pub plugin_list_area: Option<Rect>,
 }
 
 impl Default for AppModel {
@@ -439,7 +451,7 @@ impl Default for AppModel {
             contacts: Vec::new(),
             users: Vec::new(),
             user_selection_active: false,
-            user_selection_state: TableState::default(),
+            user_selection_state: ListState::default(),
             search_state: SearchState::default(),
             appearance: Appearance::default(),
             week_offset: 0,
@@ -455,6 +467,7 @@ impl Default for AppModel {
             plugin_entries: Vec::new(),
             plugin_view_state: PluginViewState::default(),
             import_state: ImportState::default(),
+            plugin_list_area: None,
         }
     }
 }

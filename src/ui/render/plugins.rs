@@ -96,16 +96,20 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
     let content_area = chunks[0];
 
     // Split the content area into two sections: plugin list and plugin details
-    let chunks = Layout::default()
+    let list_detail_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(content_area);
 
-    render_plugin_list(model, frame, chunks[0], &plugins);
-    render_plugin_details(model, frame, chunks[1], &plugins);
+    // Store the list area for mouse events
+    model.plugin_list_area = Some(list_detail_chunks[0]);
+
+    // Render the plugin list (statefully) and details
+    render_plugin_list(model, frame, list_detail_chunks[0], &plugins);
+    render_plugin_details(model, frame, list_detail_chunks[1], &plugins);
 }
 
-/// Render the list of plugins in the left panel
+/// Render the list of plugins in the left panel (always statefully)
 fn render_plugin_list(model: &mut AppModel, frame: &mut Frame, area: Rect, plugins: &[PluginInfo]) {
     // Create the plugin list items
     let items: Vec<ListItem> = plugins
@@ -124,7 +128,7 @@ fn render_plugin_list(model: &mut AppModel, frame: &mut Frame, area: Rect, plugi
         })
         .collect();
 
-    let mut plugin_list = List::new(items)
+    let plugin_list = List::new(items)
         .block(
             model
                 .appearance
@@ -134,29 +138,18 @@ fn render_plugin_list(model: &mut AppModel, frame: &mut Frame, area: Rect, plugi
         )
         .highlight_style(
             Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD),
-        );
+        )
+        .highlight_symbol("> "); // Always show highlight symbol
 
-    // Set the selected item if applicable
-    if let Some(selected_idx) = model.plugin_view_state.selected_index {
-        plugin_list = plugin_list.highlight_symbol("> ");
-
-        // We need to create a stateful widget for selection to work
-        let mut state = ListState::default();
-        state.select(Some(selected_idx));
-
-        // Render the stateful list
-        frame.render_stateful_widget(plugin_list, area, &mut state);
-    } else {
-        // Render the list without selection
-        frame.render_widget(plugin_list, area);
-    }
+    // Render the stateful list using the ListState from the model
+    frame.render_stateful_widget(plugin_list, area, &mut model.plugin_view_state.plugin_list_state);
 }
 
 /// Render the details of the selected plugin in the right panel
 fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, plugins: &[PluginInfo]) {
-    // Show plugin details if a plugin is selected
-    let selected_plugin = match &model.plugin_view_state.selected_index {
-        Some(idx) if *idx < plugins.len() => Some(&plugins[*idx]),
+    // Use the synced selected_index from the model state
+    let selected_plugin = match model.plugin_view_state.selected_index {
+        Some(idx) if idx < plugins.len() => Some(&plugins[idx]),
         _ => None,
     };
 
@@ -245,5 +238,17 @@ fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, pl
             .wrap(Wrap { trim: true });
 
         frame.render_widget(plugin_details, area);
+    } else {
+        // Optional: Render a placeholder if no plugin is selected
+        let placeholder_text = Paragraph::new(t!("ui_plugins_select_prompt"))
+            .alignment(Alignment::Center)
+            .block(
+                model
+                    .appearance
+                    .default_block
+                    .clone()
+                    .title(format!(" {} ", t!("ui_plugins_details"))),
+            );
+        frame.render_widget(placeholder_text, area);
     }
 }
