@@ -13,7 +13,7 @@ echo "Creating plugin in: $CONFIG_DIR"
 # Create manifest.toml
 cat > "$CONFIG_DIR/manifest.toml" << 'EOF'
 [plugin]
-name = "python-example"
+name = "Python example"
 version = "0.1.0"
 description = "Example Python plugin for mot"
 icon = "🐍"  # Snake emoji will be displayed in the time entry table

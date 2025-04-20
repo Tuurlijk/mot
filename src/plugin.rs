@@ -29,8 +29,8 @@ pub struct PluginTimeEntry {
     pub started_at: String, // RFC3339 format
     pub ended_at: String,   // RFC3339 format
     pub tags: Vec<String>,
-    pub source: String,
     pub source_url: Option<String>,
+    pub plugin_name: Option<String>, // Required - should match manifest name
 }
 
 impl From<PluginTimeEntry> for TimeEntryForTable {
@@ -43,8 +43,9 @@ impl From<PluginTimeEntry> for TimeEntryForTable {
             project: entry.project_name.unwrap_or_else(|| "Unknown".to_string()),
             customer: entry.customer_name.unwrap_or_else(|| "Unknown".to_string()),
             billable: true,
-            icon: None,
-            source: entry.source.clone(),
+            icon: None, // Icons will be applied by the app based on plugin_name
+            source: "plugin".to_string(), // Use generic "plugin" value instead of variable source
+            plugin_name: entry.plugin_name, // Pass through plugin_name directly
         }
     }
 }
@@ -383,7 +384,13 @@ impl PluginManager {
         }
         
         if let Some(result) = response.result {
-            let entries: Vec<PluginTimeEntry> = serde_json::from_value(result)?;
+            let mut entries: Vec<PluginTimeEntry> = serde_json::from_value(result)?;
+            
+            // Ensure each entry has the correct plugin_name set, overriding any value from the plugin
+            for entry in &mut entries {
+                entry.plugin_name = Some(plugin_name.to_string());
+            }
+            
             Ok(entries)
         } else {
             Ok(vec![])

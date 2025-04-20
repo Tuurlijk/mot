@@ -208,6 +208,7 @@ pub(crate) struct TimeEntryForTable {
     pub billable: bool,
     pub source: String, // Plugin name or "moneybird"
     pub icon: Option<String>, // Custom icon from plugin manifest
+    pub plugin_name: Option<String>, // Matched plugin name for consistency
 }
 
 /// State for editing a time entry

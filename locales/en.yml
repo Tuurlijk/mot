@@ -249,6 +249,7 @@ plugin_init_error: "Error initializing plugin %{name}: %{error}"
 plugin_get_entries_error: "Error getting entries from %{name}: %{error}"
 plugin_shutdown_error: "Error shutting down plugin %{name}: %{error}"
 plugin_entries_loaded: "Loaded %{count} time entries from plugins"
+plugin_error: "Plugin '%{name}' error: %{error}"
 
 # UI - Plugin View
 ui_plugins_title: "Plugins"

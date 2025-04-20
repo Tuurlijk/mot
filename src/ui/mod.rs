@@ -69,7 +69,7 @@ pub(crate) fn get_contact_name(
 /// Generate a default icon based on a name, ensuring consistency across the application
 pub fn get_default_icon(name: &str) -> String {
     // Available default icons (colored circles)
-    let plugin_icons = ["🔴", "⚪", "🟡", "🟠", "🟢"];
+    let plugin_icons = ["🔴", "🟣", "🟡", "🟠", "🟢", "⚫", "⚪", "🟤"];
     
     // Normalize the string more aggressively to handle similar names
     // 1. Convert to lowercase
@@ -80,18 +80,17 @@ pub fn get_default_icon(name: &str) -> String {
         .filter(|c| c.is_alphanumeric())
         .collect::<String>();
     
-    // For very short normalized names (like "h"), use a more stable approach
-    let hash = if normalized_name.len() <= 2 {
-        // Use first letter as index for very short names
-        if let Some(c) = normalized_name.chars().next() {
-            (c as usize) % plugin_icons.len()
-        } else {
-            0 // Default to first icon if empty
-        }
-    } else {
-        // For longer names, use a hash of the entire normalized string
-        normalized_name.chars().fold(0, |acc, c| acc + c as usize) % plugin_icons.len()
-    };
+    if normalized_name.is_empty() {
+        return plugin_icons[0].to_string(); // Default for empty names
+    }
     
-    plugin_icons[hash].to_string()
+    // Use a better hashing approach that produces more distinct results
+    // We'll use a simple but effective hash algorithm (djb2)
+    let mut hash: u32 = 5381;
+    for c in normalized_name.chars() {
+        // hash * 33 + c
+        hash = hash.wrapping_mul(33).wrapping_add(c as u32);
+    }
+    
+    plugin_icons[(hash % plugin_icons.len() as u32) as usize].to_string()
 }

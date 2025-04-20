@@ -3,6 +3,7 @@ use crate::moneybird::types::{Contact, Project, TimeEntry, User};
 use crate::moneybird::{self, types::Administration};
 use crate::{datetime, AppModel, TimeEntryForTable};
 use crate::plugin::PluginInfo;
+use crate::ui;
 use color_eyre::eyre::Result;
 use reqwest::Response;
 use rust_i18n::t;
@@ -418,6 +419,7 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                     billable: entry.billable.unwrap_or_default(),
                     source: "moneybird".to_string(),
                     icon: None,
+                    plugin_name: None,
                 })
                 .collect();
 
@@ -790,51 +792,49 @@ pub(crate) async fn get_all_users(
     }
 }
 
-/// Normalizes a string for plugin name matching by converting to lowercase and removing spaces/hyphens
-fn normalize_string_for_matching(input: &str) -> String {
-    input.to_lowercase()
-        .replace(' ', "")
-        .replace('-', "")
-}
-
-/// Checks if a plugin matches a source based on normalized string comparison
-fn plugin_matches_source(plugin_name: &str, source: &str) -> bool {
-    // Normalize both strings
-    let source_normalized = normalize_string_for_matching(source);
-    let plugin_name_normalized = normalize_string_for_matching(plugin_name);
-    
-    // Check all matching conditions
-    source_normalized.contains(&plugin_name_normalized) || 
-    plugin_name_normalized.contains(&source_normalized) ||
-    // Also check with the original strings for backward compatibility
-    source.to_lowercase().contains(&plugin_name.to_lowercase()) || 
-    plugin_name.to_lowercase().contains(&source.to_lowercase())
-}
-
-/// Apply plugin icons to time entries based on their source
+/// Apply plugin icons to time entries based on their plugin_name
 fn apply_plugin_icons(model: &mut AppModel, entries: &mut [TimeEntryForTable], plugin_infos: &[PluginInfo]) {
     for entry in entries {
-        // Add debug logging to see source names and plugin names
-        model.log_debug(format!("Entry source: '{}', looking for matching plugin", entry.source));
-        
-        // Try to find a matching plugin
-        let mut matched = false;
-        for plugin_info in plugin_infos {
-            // Log each plugin we're checking against
-            model.log_debug(format!("Checking plugin: '{}' with icon: {:?}", 
-                              plugin_info.name, plugin_info.icon));
+        // Only process entries that have a plugin_name
+        if let Some(entry_plugin_name) = &entry.plugin_name {
+            model.log_debug(format!("Entry plugin_name: '{}', looking for matching plugin", entry_plugin_name));
             
-            if plugin_matches_source(&plugin_info.name, &entry.source) {
-                entry.icon = plugin_info.icon.clone();
-                model.log_debug(format!("Matched! Source: '{}' with plugin: '{}', icon: {:?}", 
-                                 entry.source, plugin_info.name, entry.icon));
-                matched = true;
-                break;
+            // Try to find a matching plugin by exact name
+            let mut matched = false;
+            for plugin_info in plugin_infos {
+                // Log each plugin we're checking against
+                model.log_debug(format!("Checking plugin: '{}' with icon: {:?}", 
+                                plugin_info.name, plugin_info.icon));
+                
+                // Match by exact plugin name
+                if entry_plugin_name == &plugin_info.name {
+                    // Apply icon from the manifest
+                    entry.icon = plugin_info.icon.clone();
+                    model.log_debug(format!("Matched! Plugin: '{}', icon: {:?}", 
+                                    plugin_info.name, entry.icon));
+                    matched = true;
+                    break;
+                }
             }
-        }
-        
-        if !matched {
-            model.log_debug(format!("No matching plugin found for source: '{}'", entry.source));
+            
+            if !matched {
+                model.log_debug(format!("No matching plugin found for plugin_name: '{}'", entry_plugin_name));
+                
+                // If we have no icon but do have a plugin_name, generate one from the plugin_name 
+                if entry.icon.is_none() {
+                    entry.icon = Some(ui::get_default_icon(entry_plugin_name));
+                    model.log_debug(format!("Generated default icon for plugin_name: '{}'", entry_plugin_name));
+                }
+            }
+        } else {
+            model.log_debug("Entry has no plugin_name set, cannot match to a plugin".to_string());
+            
+            // For backward compatibility, if there's no plugin_name but source isn't "moneybird",
+            // use the source field as plugin_name
+            if entry.source != "moneybird" && entry.source != "plugin" {
+                entry.plugin_name = Some(entry.source.clone());
+                model.log_debug(format!("Using source '{}' as plugin_name for backward compatibility", entry.source));
+            }
         }
     }
 }

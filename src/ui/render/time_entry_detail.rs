@@ -16,9 +16,12 @@ fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
     } else if time_entry.source.to_lowercase() == "moneybird" {
         // Use blue circle for Moneybird 
         "🔵".to_string()
+    } else if let Some(plugin_name) = &time_entry.plugin_name {
+        // Use the plugin name for consistent icons
+        ui::get_default_icon(plugin_name)
     } else {
-        // Use the centralized function for default icons
-        ui::get_default_icon(&time_entry.source)
+        // Use a default icon for unmatched entries
+        "❓".to_string()
     }
 }
 
@@ -142,11 +145,13 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
     ];
     title_spans.extend(client_project.clone());
     
-    // Add source information if not from Moneybird
+    // Add plugin information if not from Moneybird
     if selected_item.source.to_lowercase() != "moneybird" {
-        title_spans.push(Span::from(" ("));
-        title_spans.push(Span::from(&selected_item.source).italic());
-        title_spans.push(Span::from(")"));
+        if let Some(plugin_name) = &selected_item.plugin_name {
+            title_spans.push(Span::from(" ("));
+            title_spans.push(Span::from(plugin_name).italic());
+            title_spans.push(Span::from(")"));
+        }
     }
     
     title_spans.push(Span::from(" "));

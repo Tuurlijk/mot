@@ -13,7 +13,7 @@ echo "Creating plugin in: $CONFIG_DIR"
 # Create manifest.toml
 cat > "$CONFIG_DIR/manifest.toml" << 'EOF'
 [plugin]
-name = "hello"
+name = "Hello?"
 version = "0.1.0"
 description = "A simple example plugin that returns a static time entry"
 
