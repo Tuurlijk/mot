@@ -24,7 +24,6 @@ pub enum Message {
     EditTimeEntryKeyPress(KeyEvent),
     EditTimeEntryNextField,
     EditTimeEntryPreviousField,
-    EditTimeEntrySave,
     EditTimeEntrySelectContact,
     EditTimeEntrySelectProject,
     
@@ -242,31 +241,49 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         }
     }
 
-    // --- Refactored Edit State Key Handling ---
+    // --- Refactored Edit State Key Handling (Regular Edit or Import Edit) ---
     if model.edit_state.active || model.import_state.active {
+        // Determine which edit state to use (regular or import)
+        let is_import = model.import_state.active;
+        let edit_state = if is_import {
+            &model.import_state.edit_state
+        } else {
+            &model.edit_state
+        };
+
         match key.code {
             // --- Global Edit Keys ---
             KeyCode::Char('s') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
                 Some(Message::EditSave)
             }
-            KeyCode::Enter => Some(Message::EditSave),
+            KeyCode::Enter => {
+                // Check if we are in an autocomplete field with the dropdown visible
+                match edit_state.selected_field {
+                    crate::model::EditField::Project => {
+                        if edit_state.project_autocomplete.is_dropdown_visible {
+                            Some(Message::AutocompleteSelect)
+                        } else {
+                            Some(Message::EditSave) // Save if dropdown not visible
+                        }
+                    }
+                    crate::model::EditField::Contact => {
+                        if edit_state.contact_autocomplete.is_dropdown_visible {
+                            Some(Message::AutocompleteSelect)
+                        } else {
+                            Some(Message::EditSave) // Save if dropdown not visible
+                        }
+                    }
+                    _ => Some(Message::EditSave), // Save for all other fields
+                }
+            }
             KeyCode::Tab => Some(Message::EditTimeEntryNextField),
             KeyCode::BackTab => Some(Message::EditTimeEntryPreviousField),
 
             // --- Keys with Field-Dependent Behavior ---
             KeyCode::Up => {
-                // Get the appropriate edit state
-                let edit_state = if model.import_state.active {
-                    &model.import_state.edit_state
-                } else {
-                    &model.edit_state
-                };
-                
                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if edit_state.selected_field
-                            == crate::model::EditField::Project
-                        {
+                        let is_dropdown_visible = if edit_state.selected_field == crate::model::EditField::Project {
                             edit_state.project_autocomplete.is_dropdown_visible
                         } else {
                             edit_state.contact_autocomplete.is_dropdown_visible
@@ -274,26 +291,16 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                         if is_dropdown_visible {
                             Some(Message::AutocompletePreviousItem)
                         } else {
-                            // No action if dropdown not visible for now
-                            None
+                            None // No action if dropdown not visible
                         }
                     }
                     _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
             KeyCode::Down => {
-                // Get the appropriate edit state
-                let edit_state = if model.import_state.active {
-                    &model.import_state.edit_state
-                } else {
-                    &model.edit_state
-                };
-                
-                match edit_state.selected_field {
+                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if edit_state.selected_field
-                            == crate::model::EditField::Project
-                        {
+                        let is_dropdown_visible = if edit_state.selected_field == crate::model::EditField::Project {
                             edit_state.project_autocomplete.is_dropdown_visible
                         } else {
                             edit_state.contact_autocomplete.is_dropdown_visible
@@ -301,9 +308,9 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                         if is_dropdown_visible {
                             Some(Message::AutocompleteNextItem)
                         } else {
-                            // Trigger refresh if dropdown not visible and input exists?
-                            // Or maybe do nothing?
-                            None // Doing nothing for now
+                             // Maybe trigger refresh if dropdown not visible and input exists?
+                             // For now, do nothing.
+                            None
                         }
                     }
                     _ => Some(Message::EditTimeEntryKeyPress(key)),
@@ -311,58 +318,32 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             }
             KeyCode::Esc => Some(Message::EditCancel),
             KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
-                // Get the appropriate edit state
-                let edit_state = if model.import_state.active {
-                    &model.import_state.edit_state
-                } else {
-                    &model.edit_state
-                };
-                
                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
                         Some(Message::AutocompleteClearInput)
                     }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass Ctrl+U to standard editor fields
+                    _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
             KeyCode::Char(_) | KeyCode::Backspace => {
-                // Get the appropriate edit state
-                let edit_state = if model.import_state.active {
-                    &model.import_state.edit_state
-                } else {
-                    &model.edit_state
-                };
-                
-                match edit_state.selected_field {
+                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
                         Some(Message::AutocompleteKeyPress(key))
                     }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass character/backspace to standard editor fields
+                    _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
-            // Catch-all for any other keys (e.g., F-keys not handled above, Delete, Home, End etc.)
+            // Catch-all for other keys
             _ => {
-                // Get the appropriate edit state
-                let edit_state = if model.import_state.active {
-                    &model.import_state.edit_state
-                } else {
-                    &model.edit_state
-                };
-                
-                // Pass to standard editor fields if appropriate, otherwise ignore
-                match edit_state.selected_field {
+                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        model.log_debug(t!(
-                            "event_ignoring_unhandled_key",
-                            key = format!("{:?}", key.code)
-                        ));
-                        None // Ignore in Project/Contact fields as they don't use the shared editor
+                        model.log_debug(t!("event_ignoring_unhandled_key", key = format!("{:?}", key.code)));
+                        None
                     }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass to editor for Description, Dates, Times
+                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass to editor for other fields
                 }
             }
         }
-    // --- End Refactored Edit State ---
     } else {
         // --- Handling for Non-Edit State ---
         if model.search_state.active {
@@ -388,11 +369,9 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 KeyCode::Char('k') | KeyCode::Up => Some(Message::TimeEntrySelectPrevious),
                 KeyCode::Char('l') | KeyCode::Right => Some(Message::TimeEntryNextWeek),
                 KeyCode::Char('p') => Some(Message::PluginViewShow),
-                KeyCode::Char('i') => Some(Message::ImportTimeEntry), // New import action
+                KeyCode::Char('i') => Some(Message::ImportTimeEntry),
                 KeyCode::Char('q') => Some(Message::Quit),
-                KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
-                    Some(Message::EditTimeEntry)
-                }
+                KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => Some(Message::EditTimeEntry),
                 KeyCode::Char('c') => Some(Message::TimeEntryCreate),
                 KeyCode::Char('t') => Some(Message::TimeEntryCurrentWeek),
                 KeyCode::Char('r') => Some(Message::TimeEntryRefresh),

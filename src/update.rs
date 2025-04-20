@@ -4,18 +4,52 @@ use rust_i18n::t;
 use tui_textarea::TextArea;
 
 use crate::{
+    api,
     api::{get_contacts_by_query, get_time_entries},
     config, datetime,
     event::Message,
     file,
-    model::{AppModel, AutocompleteState, EditState, TimeEntryForTable},
+    model::{AppModel, AutocompleteState, EditState, ImportState, TimeEntryForTable},
     ui::{self},
     RunningState,
-    api,
 };
 
 // Import the EditField enum
 use crate::model::EditField;
+
+// --- Helper Functions for Selection Logic ---
+
+/// Calculates the next selection index, preventing wrapping.
+fn calculate_next_index(current_index_opt: Option<usize>, count: usize) -> Option<usize> {
+    if count == 0 {
+        return None; // No items to select
+    }
+    let current_index = current_index_opt.unwrap_or(0);
+    if current_index < count - 1 {
+        Some(current_index + 1)
+    } else {
+        current_index_opt // Stay at the last item
+    }
+}
+
+/// Calculates the previous selection index, preventing wrapping.
+fn calculate_previous_index(current_index_opt: Option<usize>, _count: usize) -> Option<usize> {
+    let current_index = current_index_opt.unwrap_or(0);
+    if current_index > 0 {
+        Some(current_index - 1)
+    } else {
+        current_index_opt // Stay at the first item
+    }
+}
+
+/// Validates if a given index is within the bounds of the item count.
+fn validate_row_index(index: usize, count: usize) -> Option<usize> {
+    if count > 0 && index < count {
+        Some(index)
+    } else {
+        None
+    }
+}
 
 // Helper function to update the EditState field based on the editor content
 fn update_edit_field_from_editor(edit_state: &mut EditState) {
@@ -127,16 +161,27 @@ fn handle_autocomplete_clear<T: Clone>(
 
 // Helper function to handle selecting a project from autocomplete
 fn handle_autocomplete_select_project(model: &mut AppModel) {
-    if let Some(selected_project) = model.edit_state.project_autocomplete.selected_item() {
-        // Add selected project to the project list on model.projects if it's not already there
+    // Determine which edit state to modify
+    let is_import = model.import_state.active;
+    let edit_state = if is_import {
+        &mut model.import_state.edit_state
+    } else {
+        &mut model.edit_state
+    };
+
+    if let Some(selected_project) = edit_state.project_autocomplete.selected_item() {
+        // Add selected project to the main project list if it's not already there
         if !model.projects.iter().any(|p| p.id == selected_project.id) {
             model.projects.push(selected_project.clone());
         }
 
         let project_id = selected_project.id.clone();
         let project_name = selected_project.name.clone().unwrap_or_default();
-        model.edit_state.project_id = project_id;
-        let autocomplete_state = &mut model.edit_state.project_autocomplete;
+
+        // Update the correct edit state
+        edit_state.project_id = project_id;
+        edit_state.project_name = project_name.clone(); // Update display name too
+        let autocomplete_state = &mut edit_state.project_autocomplete;
         autocomplete_state.input = project_name.clone();
         autocomplete_state.mark_searched(); // Prevent re-search
         autocomplete_state.is_dropdown_visible = false;
@@ -147,16 +192,27 @@ fn handle_autocomplete_select_project(model: &mut AppModel) {
 
 // Helper function to handle selecting a contact from autocomplete
 fn handle_autocomplete_select_contact(model: &mut AppModel) {
-    if let Some(selected_contact) = model.edit_state.contact_autocomplete.selected_item() {
-        // Add selected contact to the contact list on model.contacts if it's not already there
+    // Determine which edit state to modify
+    let is_import = model.import_state.active;
+    let edit_state = if is_import {
+        &mut model.import_state.edit_state
+    } else {
+        &mut model.edit_state
+    };
+
+    if let Some(selected_contact) = edit_state.contact_autocomplete.selected_item() {
+        // Add selected contact to the main contact list if it's not already there
         if !model.contacts.iter().any(|c| c.id == selected_contact.id) {
             model.contacts.push(selected_contact.clone());
         }
 
         let contact_id = selected_contact.id.clone();
         let contact_name = selected_contact.company_name.clone().unwrap_or_default();
-        model.edit_state.contact_id = contact_id;
-        let autocomplete_state = &mut model.edit_state.contact_autocomplete;
+
+        // Update the correct edit state
+        edit_state.contact_id = contact_id;
+        edit_state.contact_name = contact_name.clone(); // Update display name too
+        let autocomplete_state = &mut edit_state.contact_autocomplete;
         autocomplete_state.input = contact_name.clone();
         autocomplete_state.mark_searched(); // Prevent re-search
         autocomplete_state.is_dropdown_visible = false;
@@ -167,20 +223,49 @@ fn handle_autocomplete_select_contact(model: &mut AppModel) {
 
 // Helper function to refresh project autocomplete suggestions (local filter)
 async fn handle_autocomplete_refresh_project(model: &mut AppModel) -> Option<Message> {
-    let query = model.edit_state.project_autocomplete.input.clone();
-    let min_chars = model.edit_state.project_autocomplete.min_chars_to_search;
+    // Determine which edit state to use
+    let is_import = model.import_state.active;
+    let (query, min_chars) = {
+        let edit_state = if is_import {
+            &mut model.import_state.edit_state
+        } else {
+            &mut model.edit_state
+        };
+        (
+            edit_state.project_autocomplete.input.clone(),
+            edit_state.project_autocomplete.min_chars_to_search,
+        )
+    }; // edit_state borrow ends here
 
     if query.is_empty() || query.len() < min_chars {
-        model.edit_state.project_autocomplete.update_items(vec![]);
+        // Re-borrow edit_state mutably for update
+        let edit_state = if is_import {
+            &mut model.import_state.edit_state
+        } else {
+            &mut model.edit_state
+        };
+        edit_state.project_autocomplete.update_items(vec![]);
+        // Borrow model immutably for logging after mutable borrow is released
         model.log_debug(format!(
             "Query '{}' too short or empty, cleared project items.",
             query
         ));
     } else {
-        model.edit_state.project_autocomplete.mark_searched();
+        // Mark searched in a separate mutable borrow scope
+        {
+            let edit_state = if is_import {
+                &mut model.import_state.edit_state
+            } else {
+                &mut model.edit_state
+            };
+            edit_state.project_autocomplete.mark_searched();
+        } // edit_state borrow ends here
+
+        // Borrow model immutably for logging
         model.log_debug(t!("update_filtering_local_projects", query = query));
 
-        let filtered_projects = model
+        // Use the main model.projects list for filtering (immutable borrow)
+        let filtered_projects: Vec<_> = model
             .projects
             .iter()
             .filter(|p| {
@@ -193,59 +278,135 @@ async fn handle_autocomplete_refresh_project(model: &mut AppModel) -> Option<Mes
             .cloned()
             .collect();
 
-        model
-            .edit_state
-            .project_autocomplete
-            .update_items(filtered_projects);
+        let items_count = filtered_projects.len();
+
+        // Update items in a separate mutable borrow scope
+        {
+            let edit_state = if is_import {
+                &mut model.import_state.edit_state
+            } else {
+                &mut model.edit_state
+            };
+            edit_state
+                .project_autocomplete
+                .update_items(filtered_projects);
+        } // edit_state borrow ends here
+
+        // Log after the mutable borrow is released
         model.log_debug(format!(
             "Local filter found {} projects.",
-            model.edit_state.project_autocomplete.items.len()
+            items_count // Use the stored count
         ));
     }
-    
+
     None // Return None as we've already updated the state
 }
 
 // Helper function to refresh contact autocomplete suggestions (API call)
 async fn handle_autocomplete_refresh_contact(model: &mut AppModel) -> Option<Message> {
-    let query = model.edit_state.contact_autocomplete.input.clone();
-    let min_chars = model.edit_state.contact_autocomplete.min_chars_to_search;
+    // Determine which edit state to use
+    let is_import = model.import_state.active;
+    let (query, min_chars) = {
+        let edit_state = if is_import {
+            &mut model.import_state.edit_state
+        } else {
+            &mut model.edit_state
+        };
+        (
+            edit_state.contact_autocomplete.input.clone(),
+            edit_state.contact_autocomplete.min_chars_to_search,
+        )
+    }; // edit_state borrow ends here
 
     if query.is_empty() || query.len() < min_chars {
-        model.edit_state.contact_autocomplete.update_items(vec![]);
+        // Re-borrow edit_state mutably for update
+        {
+            let edit_state = if is_import {
+                &mut model.import_state.edit_state
+            } else {
+                &mut model.edit_state
+            };
+            edit_state.contact_autocomplete.update_items(vec![]);
+        } // edit_state borrow ends here
+
+        // Borrow model immutably for logging after mutable borrow is released
         model.log_debug(format!(
             "Query '{}' too short or empty, cleared contact items.",
             query
         ));
     } else {
-        model.edit_state.contact_autocomplete.is_loading = true;
-        model.edit_state.contact_autocomplete.mark_searched();
+        // Set loading and mark searched in a separate mutable borrow scope
+        {
+            let edit_state = if is_import {
+                &mut model.import_state.edit_state
+            } else {
+                &mut model.edit_state
+            };
+            edit_state.contact_autocomplete.is_loading = true;
+            edit_state.contact_autocomplete.mark_searched();
+        } // edit_state borrow ends here
+
+        // Log before API call (immutable borrow)
         model.log_debug(format!(
             "Calling API to search contacts for query: '{}'",
             query
         ));
 
+        // API call parameters remain the same (immutable borrows of model parts)
         let client = model.client.clone();
         let admin_id = model.administration.id.clone().unwrap_or_default();
 
-        match get_contacts_by_query(&client, &admin_id, &query).await {
+        // Perform the API call
+        let api_result = get_contacts_by_query(&client, &admin_id, &query).await;
+
+        // Process result and update state in a new mutable borrow scope
+        let mut items_count = 0;
+        match api_result {
             Ok(contacts) => {
-                model.edit_state.contact_autocomplete.update_items(contacts);
+                items_count = contacts.len();
+                // Update the correct edit state
+                {
+                    let edit_state = if is_import {
+                        &mut model.import_state.edit_state
+                    } else {
+                        &mut model.edit_state
+                    };
+                    edit_state.contact_autocomplete.update_items(contacts);
+                } // edit_state borrow ends here
+
+                // Log success (immutable borrow)
                 model.log_debug(format!(
                     "API search succeeded. Found {} contacts.",
-                    model.edit_state.contact_autocomplete.items.len()
+                    items_count
                 ));
             }
             Err(err) => {
                 let error_msg =
                     t!("update_api_search_contacts_failed", error = err.to_string()).to_string();
+                // Show error uses immutable borrow temporarily
                 ui::show_error(model, error_msg.clone());
-                model.edit_state.contact_autocomplete.update_items(vec![]);
+                // Update the correct edit state
+                {
+                    let edit_state = if is_import {
+                        &mut model.import_state.edit_state
+                    } else {
+                        &mut model.edit_state
+                    };
+                    edit_state.contact_autocomplete.update_items(vec![]);
+                } // edit_state borrow ends here
             }
         }
-        model.edit_state.contact_autocomplete.is_loading = false;
+        // Update loading state in a final mutable borrow scope
+        {
+            let edit_state = if is_import {
+                &mut model.import_state.edit_state
+            } else {
+                &mut model.edit_state
+            };
+            edit_state.contact_autocomplete.is_loading = false;
+        } // edit_state borrow ends here
     }
-    
+
     None // Return None as we've already updated the state
 }
 
@@ -339,108 +500,133 @@ fn handle_modal_close(
 /// Initialize an import from a plugin time entry to Moneybird
 fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
     // Make sure we have a selected entry
-    if model.time_entries_for_table.is_empty() || model.time_entry_table_state.selected().is_none() {
+    if model.time_entries_for_table.is_empty() || model.time_entry_table_state.selected().is_none()
+    {
         return None;
     }
 
     let selected_idx = model.time_entry_table_state.selected().unwrap();
     // Clone the entry to avoid borrowing conflicts
     let selected_entry = model.time_entries_for_table[selected_idx].clone();
-    
+
     // Only allow importing of plugin entries (not Moneybird entries)
     if selected_entry.source.to_lowercase() == "moneybird" {
         model.log_notice(t!("update_cant_import_moneybird_entry"));
         return None;
     }
-    
+
     // Log that we're importing the entry
-    model.log_notice(t!("update_importing_time_entry", 
-                     description = selected_entry.description.clone(),
-                     source = selected_entry.source.clone()));
-    
+    model.log_notice(t!(
+        "update_importing_time_entry",
+        description = selected_entry.description.clone(),
+        source = selected_entry.source.clone()
+    ));
+
     // Store the original entry in the import state
     model.import_state.original_entry = Some(selected_entry.clone());
-    
+
     // Initialize edit state for the import
     let mut edit_state = EditState::default();
     edit_state.active = true;
-    edit_state.is_create_mode = true;
+    edit_state.is_create_mode = true; // Import is technically creating a new entry in MB
     edit_state.description = selected_entry.description.clone();
+    // Initialize names here, might be overwritten if match found
     edit_state.project_name = selected_entry.project.clone();
     edit_state.contact_name = selected_entry.customer.clone();
-    edit_state.time_entry_id = Some(selected_entry.id.clone());
-    
+    edit_state.time_entry_id = None; // Always creating a new entry on import
+
     // Parse and set date/time fields from the original entry
-    let admin_timezone = model.administration.time_zone.clone().unwrap_or_else(|| "UTC".to_string());
-    
-    if let (Some(start_date), Some(start_time)) = 
-        datetime::parse_datetime_for_edit(&selected_entry.started_at, &admin_timezone) {
+    let admin_timezone = model
+        .administration
+        .time_zone
+        .clone()
+        .unwrap_or_else(|| "UTC".to_string());
+
+    if let (Some(start_date), Some(start_time)) =
+        datetime::parse_datetime_for_edit(&selected_entry.started_at, &admin_timezone)
+    {
         edit_state.start_date = start_date;
         edit_state.start_time = start_time;
     }
-    
-    if let (Some(end_date), Some(end_time)) = 
-        datetime::parse_datetime_for_edit(&selected_entry.ended_at, &admin_timezone) {
+
+    if let (Some(end_date), Some(end_time)) =
+        datetime::parse_datetime_for_edit(&selected_entry.ended_at, &admin_timezone)
+    {
         edit_state.end_date = end_date;
         edit_state.end_time = end_time;
     }
-    
+
     // Set up editor with the description text
     edit_state.editor = TextArea::new(vec![edit_state.description.clone()]);
     edit_state.selected_field = EditField::Description;
-    
-    // Try to match the project and contact with Moneybird entities
+
+    // Try to match the contact with Moneybird entities
     if !model.contacts.is_empty() {
-        // Try to find matching contact by name
         let contact_name_lower = selected_entry.customer.to_lowercase();
-        
         for contact in &model.contacts {
             let name = crate::ui::format_contact_name(contact).to_lowercase();
-            if name == contact_name_lower || name.contains(&contact_name_lower) || contact_name_lower.contains(&name) {
+            if name == contact_name_lower
+                || name.contains(&contact_name_lower)
+                || contact_name_lower.contains(&name)
+            {
+                let matched_name = crate::ui::format_contact_name(contact);
                 edit_state.contact_id = contact.id.clone();
-                edit_state.contact_name = crate::ui::format_contact_name(contact);
-                // Log before moving to next phase
-                model.log_notice(format!("Matched contact: {}", edit_state.contact_name.clone()));
+                edit_state.contact_name = matched_name.clone();
+                // Set autocomplete input and mark as searched
+                edit_state.contact_autocomplete.input = matched_name.clone();
+                edit_state.contact_autocomplete.mark_searched();
+                model.log_notice(format!("Matched contact: {}", edit_state.contact_name));
                 break;
             }
         }
     }
-    
+
+    // Try to match the project with Moneybird entities
     if !model.projects.is_empty() {
-        // Try to find matching project by name
         let project_name_lower = selected_entry.project.to_lowercase();
-        
         for project in &model.projects {
             let name = project.name.clone().unwrap_or_default().to_lowercase();
-            if name == project_name_lower || name.contains(&project_name_lower) || project_name_lower.contains(&name) {
+            if name == project_name_lower
+                || name.contains(&project_name_lower)
+                || project_name_lower.contains(&name)
+            {
+                let matched_name = project.name.clone().unwrap_or_default();
                 edit_state.project_id = project.id.clone();
-                edit_state.project_name = project.name.clone().unwrap_or_default();
-                // Log before moving to next phase
-                model.log_notice(format!("Matched project: {}", edit_state.project_name.clone()));
+                edit_state.project_name = matched_name.clone();
+                // Set autocomplete input and mark as searched
+                edit_state.project_autocomplete.input = matched_name.clone();
+                edit_state.project_autocomplete.mark_searched();
+                model.log_notice(format!("Matched project: {}", edit_state.project_name));
                 break;
             }
         }
     }
-    
-    // Show notifications for unmatched entities
+
+    // Show notifications for unmatched entities (after attempting matches)
     if edit_state.contact_id.is_none() {
         ui::show_error(
-            model, 
-            t!("update_no_contact_match", contact_name = selected_entry.customer.clone())
+            model,
+            t!(
+                "update_no_contact_match",
+                contact_name = selected_entry.customer.clone()
+            ),
         );
     }
-    
+
     if edit_state.project_id.is_none() {
         ui::show_error(
-            model, 
-            t!("update_no_project_match", project_name = selected_entry.project.clone())
+            model,
+            t!(
+                "update_no_project_match",
+                project_name = selected_entry.project.clone()
+            ),
         );
     }
-    
+
     // Set the edit state in the import state
     model.import_state.edit_state = edit_state;
     model.import_state.active = true;
-    
+
     None
 }
 
@@ -449,82 +635,14 @@ fn is_import_active(model: &AppModel) -> bool {
     model.import_state.active
 }
 
-async fn handle_import_save(model: &mut AppModel) -> Option<Message> {
-    // Get user ID from configuration
-    let user_id = match &model.config.user_id {
-        Some(id) => id.clone(),
-        None => {
-            ui::show_error(model, t!("update_missing_user_id"));
-            return None;
-        }
-    };
-
-    // Get administration ID
-    let administration_id = match &model.administration.id {
-        Some(id) => id.clone(),
-        None => {
-            ui::show_error(model, t!("update_missing_admin_id"));
-            return None;
-        }
-    };
-
-    // Get edit state from import state
-    let edit_state = &model.import_state.edit_state;
-    
-    // Make sure description is not empty (the only required field)
-    if edit_state.description.is_empty() {
-        ui::show_error(model, t!("update_description_required"));
-        return None;
-    }
-
-    // Create a time entry from the edit state
-    let time_entry = crate::moneybird::types::TimeEntry {
-        id: None, // No ID for new entries
-        administration_id: Some(administration_id.clone()),
-        contact_id: edit_state.contact_id.clone(), // This is optional
-        contact: None,
-        created_at: None,
-        description: Some(edit_state.description.clone()),
-        ended_at: Some(datetime::format_datetime_from_edit(
-            &edit_state.end_date,
-            &edit_state.end_time,
-        )),
-        events: Vec::new(),
-        notes: Vec::new(),
-        paused_duration: None,
-        project_id: edit_state.project_id.clone(), // This is optional
-        project: None,
-        started_at: Some(datetime::format_datetime_from_edit(
-            &edit_state.start_date,
-            &edit_state.start_time,
-        )),
-        updated_at: None,
-        user_id: Some(user_id.clone()),
-        billable: Some(true), // Default to billable
-    };
-
-    // Create the time entry in Moneybird
-    match api::create_time_entry(&model.client, &administration_id, &user_id, time_entry).await {
-        Ok(created_entry) => {
-            // Log success
-            let success_msg = t!("update_import_success");
-            model.log_success(success_msg.clone());
-            ui::show_info(model, "create_success", success_msg.to_string(), success_msg.to_string());
-            
-            // Reset the import state
-            model.import_state.active = false;
-            model.import_state.original_entry = None;
-            
-            // Refresh time entries to include the newly created one
-            Some(Message::TimeEntryRefresh)
-        }
-        Err(err) => {
-            // Log failure
-            let error_msg = t!("update_failed_create_time_entry", error = err.to_string());
-            model.log_error(error_msg.clone());
-            ui::show_error(model, error_msg);
-            None
-        }
+// --- Helper function to get the active mutable EditState ---
+fn get_active_edit_state_mut(model: &mut AppModel) -> Option<&mut EditState> {
+    if model.import_state.active {
+        Some(&mut model.import_state.edit_state)
+    } else if model.edit_state.active {
+        Some(&mut model.edit_state)
+    } else {
+        None
     }
 }
 
@@ -536,6 +654,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
 
+        // --- Time Entry Navigation/Refresh ---
         Message::TimeEntryPreviousWeek => {
             model.week_offset -= 1;
             model.log_notice(format!(
@@ -544,7 +663,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             ));
             Some(Message::TimeEntryRefresh)
         }
-
         Message::TimeEntryNextWeek => {
             model.week_offset += 1;
             model.log_notice(format!(
@@ -553,59 +671,97 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             ));
             Some(Message::TimeEntryRefresh)
         }
-
         Message::TimeEntryCurrentWeek => {
             model.week_offset = 0;
             model.log_notice(t!("update_log_navigating_current_week").to_string());
             Some(Message::TimeEntryRefresh)
         }
-
         Message::TimeEntryRefresh => {
             model.log_notice(t!("update_log_manual_refresh").to_string());
             get_time_entries(model).await;
             model.log_success(t!("update_time_entries_refreshed").to_string());
             None
         }
-
         Message::TimeEntrySelectNext => {
-            if model.time_entries_for_table.is_empty() {
-                return None;
-            }
-            let current_index = model.time_entry_table_state.selected().unwrap_or(0);
-            // Only select next if not already at the last item
-            if current_index < model.time_entries_for_table.len() - 1 {
-                let next_index = current_index + 1;
+            let count = model.time_entries_for_table.len();
+            if let Some(next_index) =
+                calculate_next_index(model.time_entry_table_state.selected(), count)
+            {
                 model.time_entry_table_state.select(Some(next_index));
             }
             None
         }
-
         Message::TimeEntrySelectPrevious => {
-            if model.time_entries_for_table.is_empty() {
-                return None;
-            }
-            let current_index = model.time_entry_table_state.selected().unwrap_or(0);
-            // Only select previous if not already at the first item
-            if current_index > 0 {
-                let prev_index = current_index - 1;
+            let count = model.time_entries_for_table.len();
+            if let Some(prev_index) =
+                calculate_previous_index(model.time_entry_table_state.selected(), count)
+            {
                 model.time_entry_table_state.select(Some(prev_index));
             }
             None
         }
-
+        Message::TimeEntrySelectRow(index) => {
+            let count = model.time_entries_for_table.len();
+            if let Some(valid_index) = validate_row_index(index, count) {
+                model.time_entry_table_state.select(Some(valid_index));
+            } else {
+                model.log_warning(format!(
+                    "TimeEntrySelectRow: Index {} out of bounds ({})",
+                    index, count
+                ));
+            }
+            None
+        }
         Message::TimeEntrySearchShow => {
             model.search_state.active = true;
             model.search_state.text_input = TextArea::default();
             None
         }
-
         Message::TimeEntrySearchHide => {
             model.search_state.active = false;
             model.time_entries_for_table = model.time_entries_for_table_backup.clone();
             model.ensure_valid_selection();
             None
         }
-
+        Message::TimeEntryClearSearch => {
+            if model.search_state.active {
+                model.search_state.text_input = TextArea::default();
+                model.filter_items();
+            }
+            None
+        }
+        Message::TimeEntrySearchKeyPress(key) => {
+            if model.search_state.active {
+                model.search_state.text_input.input(key);
+                model.filter_items();
+            }
+            None
+        }
+        Message::TimeEntryCreate => {
+            model.log_notice(t!("update_log_initiating_create").to_string());
+            model.edit_state = EditState::default();
+            model.edit_state.active = true;
+            model.edit_state.time_entry_id = None;
+            model.edit_state.is_create_mode = true;
+            model.edit_state.editor = TextArea::default();
+            model.edit_state.selected_field = crate::model::EditField::Description;
+            let admin_timezone_str = model
+                .administration
+                .time_zone
+                .clone()
+                .unwrap_or_else(|| "UTC".to_string());
+            let admin_tz = admin_timezone_str
+                .parse::<chrono_tz::Tz>()
+                .unwrap_or(chrono_tz::UTC);
+            let now = chrono::Utc::now().with_timezone(&admin_tz);
+            model.edit_state.start_date = now.format("%Y-%m-%d").to_string();
+            model.edit_state.start_time = now.format("%H:%M").to_string();
+            let end_time_default = now + chrono::Duration::hours(1);
+            model.edit_state.end_date = end_time_default.format("%Y-%m-%d").to_string();
+            model.edit_state.end_time = end_time_default.format("%H:%M").to_string();
+            initialize_editor_or_autocomplete(&mut model.edit_state);
+            None
+        }
         Message::TimeEntryExport => {
             if !model.time_entries_for_table.is_empty() {
                 ui::show_confirmation(
@@ -620,17 +776,26 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
+        Message::TimeEntryDelete => {
+            if let Some(selected_idx) = model.time_entry_table_state.selected() {
+                if selected_idx < model.time_entries_for_table.len() {
+                    let entry_description = model.time_entries_for_table[selected_idx]
+                        .description
+                        .clone();
+                    let entry_id = model.time_entries_for_table[selected_idx].id.clone();
 
-        Message::ConfirmModal(modal_id) => handle_modal_close(model, modal_id, true),
-
-        Message::DismissModal(modal_id, is_cancel) => {
-            handle_modal_close(model, modal_id, !is_cancel)
-        }
-
-        Message::TimeEntryClearSearch => {
-            if model.search_state.active {
-                model.search_state.text_input = TextArea::default();
-                model.filter_items();
+                    ui::show_confirmation(
+                        model,
+                        t!("delete_time_entry").to_string(),
+                        format!(
+                            "{}\n\"{}\"?",
+                            t!("confirm_delete_prompt"),
+                            entry_description
+                        ),
+                        Some(Message::ExecuteDeleteTimeEntry(entry_id)),
+                        None,
+                    );
+                }
             }
             None
         }
@@ -728,37 +893,69 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
+        Message::EditSave => {
+            let was_import = model.import_state.active;
+            let mut next_message: Option<Message> = None;
 
-        Message::EditTimeEntrySave => {
-            if model.edit_state.active {
-                update_edit_field_from_editor(&mut model.edit_state);
+            // Get timezone string outside the mutable borrow scope
+            let admin_timezone_str = model
+                .administration
+                .time_zone
+                .clone()
+                .unwrap_or_else(|| "UTC".to_string());
 
-                let admin_timezone_str = model
-                    .administration
-                    .time_zone
-                    .clone()
-                    .unwrap_or_else(|| "UTC".to_string());
-                let time_entry_data = model.edit_state.try_into_time_entry(&admin_timezone_str);
+            let mut prepared_data: Option<(
+                crate::moneybird::types::TimeEntry,
+                bool,
+                Option<String>,
+                String,
+            )> = None;
+            let mut validation_failed = false;
 
-                let is_creating = model.edit_state.time_entry_id.is_none();
+            // --- Scope for mutable borrow of edit_state ---
+            {
+                if let Some(edit_state) = get_active_edit_state_mut(model) {
+                    update_edit_field_from_editor(edit_state);
+
+                    // Check description validity first
+                    if edit_state.description.is_empty() {
+                        validation_failed = true;
+                    } else {
+                        // If valid, prepare the data within this scope
+                        let data = edit_state.try_into_time_entry(&admin_timezone_str); // Use pre-fetched timezone
+                        prepared_data = Some((
+                            data,
+                            edit_state.is_create_mode,
+                            edit_state.time_entry_id.clone(),
+                            edit_state.description.clone(),
+                        ));
+                    }
+                } else {
+                    // No active edit state, nothing to save
+                    return None;
+                }
+            } // Mutable borrow of edit_state (and model) ends here
+
+            // --- Handle validation failure outside the borrow scope ---
+            if validation_failed {
+                ui::show_error(model, t!("update_description_required"));
+                return None;
+            }
+
+            // --- Proceed only if data was prepared successfully ---
+            if let Some((time_entry_data, is_creating, entry_id_opt, description)) = prepared_data {
+                // Get immutable borrows or clones needed for API call
                 let admin_id = model.administration.id.clone().unwrap_or_default();
                 let client = model.client.clone();
                 let user_id = model.config.user_id.clone().unwrap_or_default();
 
-                // Make sure description is not empty
-                if model.edit_state.description.is_empty() {
-                    ui::show_error(model, t!("update_description_required"));
-                    return None;
-                }
-
                 if is_creating {
-                    model.log_notice(format!(
-                        "Creating new time entry: {}",
-                        model.edit_state.description
-                    ));
+                    // Log using immutable borrow of model
+                    model.log_notice(format!("Creating new time entry: {}", description));
                     let endpoint = "time_entries.json";
                     crate::api::log_debug_curl(model, endpoint, "POST");
 
+                    // API Call uses cloned client
                     match crate::api::create_time_entry(
                         &client,
                         &admin_id,
@@ -767,36 +964,35 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     )
                     .await
                     {
-                        Ok(created_entry) => {
-                            model.log_success(
-                                t!(
-                                    "time_entry_created_successfully",
-                                    id = created_entry.id.clone().unwrap_or_default()
-                                )
-                                .to_string(),
-                            );
+                        Ok(_created_entry) => {
+                            let success_msg = if was_import {
+                                t!("update_import_success")
+                            } else {
+                                t!("time_entry_was_created_successfully")
+                            };
+                            model.log_success(success_msg.clone());
                             ui::show_info(
                                 model,
                                 "create_success",
                                 t!("success").to_string(),
-                                t!("time_entry_was_created_successfully").to_string(),
+                                success_msg.to_string(),
                             );
-                            get_time_entries(model).await;
+                            next_message = Some(Message::TimeEntryRefresh);
                         }
                         Err(err) => {
                             let error_msg =
                                 t!("update_failed_create_time_entry", error = err.to_string())
                                     .to_string();
                             model.log_error(error_msg.clone());
-                            crate::ui::show_error(model, error_msg);
+                            ui::show_error(model, error_msg);
+                            return None;
                         }
                     }
-                } else if let Some(entry_id) = &model.edit_state.time_entry_id {
-                    let entry_id = entry_id.clone();
+                } else if let Some(entry_id) = entry_id_opt {
                     model.log_notice(t!(
                         "updating_time_entry_notice",
                         entry_id = entry_id.clone(),
-                        description = model.edit_state.description.clone()
+                        description = description
                     ));
                     let endpoint = format!("time_entries/{}.json", entry_id);
                     crate::api::log_debug_curl(model, &endpoint, "PATCH");
@@ -809,61 +1005,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     )
                     .await
                     {
-                        Ok(updated_entry) => {
-                            if let Some(index) = model
-                                .time_entries
-                                .iter()
-                                .position(|entry| entry.id == Some(entry_id.clone()))
-                            {
-                                if let Some(table_index) = model
-                                    .time_entries_for_table
-                                    .iter()
-                                    .position(|t_entry| t_entry.id == entry_id)
-                                {
-                                    model.time_entries[index] = updated_entry.clone();
-                                    model.time_entries_for_table[table_index] = TimeEntryForTable {
-                                        id: updated_entry.id.clone().unwrap_or_default(),
-                                        customer: updated_entry
-                                            .contact
-                                            .clone()
-                                            .unwrap_or_default()
-                                            .company_name
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        project: updated_entry
-                                            .project
-                                            .clone()
-                                            .unwrap_or_default()
-                                            .name
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        description: updated_entry
-                                            .description
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        started_at: updated_entry
-                                            .started_at
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        ended_at: updated_entry
-                                            .ended_at
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        billable: updated_entry.billable.unwrap_or_default(),
-                                        source: "moneybird".to_string(),
-                                        icon: None,
-                                        plugin_name: None,
-                                    };
-                                    if let Some(backup_index) = model
-                                        .time_entries_for_table_backup
-                                        .iter()
-                                        .position(|t_entry| t_entry.id == entry_id)
-                                    {
-                                        model.time_entries_for_table_backup[backup_index] =
-                                            model.time_entries_for_table[table_index].clone();
-                                    }
-                                }
-                            }
+                        Ok(_updated_entry) => {
                             model.log_success(t!(
                                 "time_entry_updated_successfully",
                                 id = entry_id.clone()
@@ -874,21 +1016,51 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                 t!("success").to_string(),
                                 t!("time_entry_was_updated_successfully").to_string(),
                             );
+                            next_message = Some(Message::TimeEntryRefresh);
                         }
                         Err(err) => {
                             let error_msg =
                                 t!("update_failed_update_time_entry", error = err.to_string())
                                     .to_string();
                             model.log_error(error_msg.clone());
-                            crate::ui::show_error(model, error_msg);
+                            ui::show_error(model, error_msg);
+                            return None;
                         }
                     }
                 }
-                model.edit_state = EditState::default();
+
+                // --- Reset State (only on success) ---
+                if next_message.is_some() {
+                    if was_import {
+                        model.import_state = ImportState::default();
+                    } else {
+                        model.edit_state = EditState::default();
+                    }
+                }
+            }
+            next_message
+        }
+
+        // --- Add the EditCancel arm here ---
+        Message::EditCancel => {
+            let was_import = model.import_state.active;
+            let mut state_reset = false;
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                edit_state.active = false;
+                state_reset = true;
+            }
+            if state_reset {
+                if was_import {
+                    model.import_state = ImportState::default();
+                    model.log_notice(t!("canceled_import").to_string());
+                } else {
+                    model.log_notice(t!("canceled_editing").to_string());
+                    model.edit_state = EditState::default();
+                }
             }
             None
         }
-
+        // --- End EditCancel arm ---
         Message::EditTimeEntryNextField => {
             // Get the right edit state based on whether we're in import mode or not
             let edit_state = if model.import_state.active {
@@ -919,83 +1091,326 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
-
         Message::EditTimeEntryPreviousField => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            const FIELD_ORDER: &[crate::model::EditField] = &[
-                crate::model::EditField::Description,
-                crate::model::EditField::Contact,
-                crate::model::EditField::Project,
-                crate::model::EditField::StartTime,
-                crate::model::EditField::EndTime,
-                crate::model::EditField::StartDate,
-                crate::model::EditField::EndDate,
-            ];
-            update_edit_field_from_editor(edit_state);
-            if let Some(current_index) = FIELD_ORDER
-                .iter()
-                .position(|&field| field == edit_state.selected_field)
-            {
-                let prev_index = if current_index == 0 {
-                    FIELD_ORDER.len() - 1
-                } else {
-                    current_index - 1
-                };
-                edit_state.selected_field = FIELD_ORDER[prev_index];
-                initialize_editor_or_autocomplete(edit_state);
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                const FIELD_ORDER: &[crate::model::EditField] = &[
+                    crate::model::EditField::Description,
+                    crate::model::EditField::Contact,
+                    crate::model::EditField::Project,
+                    crate::model::EditField::StartTime,
+                    crate::model::EditField::EndTime,
+                    crate::model::EditField::StartDate,
+                    crate::model::EditField::EndDate,
+                ];
+                update_edit_field_from_editor(edit_state);
+                if let Some(current_index) = FIELD_ORDER
+                    .iter()
+                    .position(|&field| field == edit_state.selected_field)
+                {
+                    let prev_index = if current_index == 0 {
+                        FIELD_ORDER.len() - 1
+                    } else {
+                        current_index - 1
+                    };
+                    edit_state.selected_field = FIELD_ORDER[prev_index];
+                    initialize_editor_or_autocomplete(edit_state);
+                }
             }
             None
         }
-
-        Message::TimeEntryDelete => {
-            if let Some(selected_idx) = model.time_entry_table_state.selected() {
-                if selected_idx < model.time_entries_for_table.len() {
-                    let entry_description = model.time_entries_for_table[selected_idx]
-                        .description
-                        .clone();
-                    let entry_id = model.time_entries_for_table[selected_idx].id.clone();
-
-                    ui::show_confirmation(
-                        model,
-                        t!("delete_time_entry").to_string(),
-                        format!(
-                            "{}\n\"{}\"?",
-                            t!("confirm_delete_prompt"),
-                            entry_description
-                        ),
-                        Some(Message::ExecuteDeleteTimeEntry(entry_id)),
-                        None,
-                    );
+        Message::EditTimeEntryFieldClick(field) => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                update_edit_field_from_editor(edit_state);
+                edit_state.selected_field = field;
+                initialize_editor_or_autocomplete(edit_state);
+                model.log_debug(t!(
+                    "update_debug_click_field",
+                    field = format!("{:?}", field)
+                ));
+            }
+            None
+        }
+        Message::EditTimeEntryKeyPress(key) => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                if !matches!(
+                    edit_state.selected_field,
+                    EditField::Project | EditField::Contact
+                ) {
+                    edit_state.editor.input(key);
+                    update_edit_field_from_editor(edit_state);
+                }
+            }
+            None
+        }
+        Message::EditTimeEntrySelectProject => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                if edit_state.selected_field == crate::model::EditField::Project {
+                    model.log_notice(t!("update_log_project_select_nyi").to_string());
+                }
+            }
+            None
+        }
+        Message::EditTimeEntrySelectContact => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                if edit_state.selected_field == crate::model::EditField::Contact {
+                    model.log_notice(t!("update_log_contact_select_nyi").to_string());
                 }
             }
             None
         }
 
-        Message::ExecuteExport => {
-            handle_export(model);
-            None // handle_export shows its own modals
+        // --- Autocomplete Handling ---
+        Message::AutocompleteKeyPress(key) => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                match edit_state.selected_field {
+                    crate::model::EditField::Project => {
+                        handle_autocomplete_keypress(&mut edit_state.project_autocomplete, key.code)
+                    }
+                    crate::model::EditField::Contact => {
+                        handle_autocomplete_keypress(&mut edit_state.contact_autocomplete, key.code)
+                    }
+                    _ => return None,
+                }
+                return Some(Message::AutocompleteRefresh);
+            }
+            None
+        }
+        Message::AutocompleteSelect => {
+            if model.import_state.active || model.edit_state.active {
+                // Check if any edit state is active
+                // Helpers now check internal state, just call them based on field
+                if let Some(edit_state) = get_active_edit_state_mut(model) {
+                    // Get read-only state to check field
+                    match edit_state.selected_field {
+                        crate::model::EditField::Project => {
+                            handle_autocomplete_select_project(model)
+                        } // Pass mutable model
+                        crate::model::EditField::Contact => {
+                            handle_autocomplete_select_contact(model)
+                        } // Pass mutable model
+                        _ => {}
+                    }
+                }
+            }
+            None
+        }
+        Message::AutocompleteRefresh => {
+            if model.import_state.active || model.edit_state.active {
+                // Check if any edit state is active
+                if let Some(edit_state) = get_active_edit_state_mut(model) {
+                    // Get read-only state to check field
+                    match edit_state.selected_field {
+                        crate::model::EditField::Project => {
+                            return handle_autocomplete_refresh_project(model).await
+                        }
+                        crate::model::EditField::Contact => {
+                            return handle_autocomplete_refresh_contact(model).await
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            None
+        }
+        Message::AutocompleteNextItem => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                match edit_state.selected_field {
+                    crate::model::EditField::Project => {
+                        handle_autocomplete_navigation(&mut edit_state.project_autocomplete, true)
+                    }
+                    crate::model::EditField::Contact => {
+                        handle_autocomplete_navigation(&mut edit_state.contact_autocomplete, true)
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        Message::AutocompletePreviousItem => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                match edit_state.selected_field {
+                    crate::model::EditField::Project => {
+                        handle_autocomplete_navigation(&mut edit_state.project_autocomplete, false)
+                    }
+                    crate::model::EditField::Contact => {
+                        handle_autocomplete_navigation(&mut edit_state.contact_autocomplete, false)
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        Message::AutocompleteClearInput => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                match edit_state.selected_field {
+                    crate::model::EditField::Project => {
+                        if let Some(msg) =
+                            handle_autocomplete_clear(&mut edit_state.project_autocomplete)
+                        {
+                            return Some(msg);
+                        } // handle_autocomplete_clear now returns Option<Message>
+                    }
+                    crate::model::EditField::Contact => {
+                        if let Some(msg) =
+                            handle_autocomplete_clear(&mut edit_state.contact_autocomplete)
+                        {
+                            return Some(msg);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        Message::AutocompleteResultsProject(projects) => {
+            // This message might need adjustment depending on whether it's for regular or import state
+            // For now, assume it updates the regular edit state's autocomplete
+            if model.edit_state.active {
+                // Only update if regular edit is active?
+                model.edit_state.project_autocomplete.update_items(projects);
+                model.log_debug(
+                    t!(
+                        "updated_project_suggestions",
+                        count = model.edit_state.project_autocomplete.items.len()
+                    )
+                    .to_string(),
+                );
+            } // Maybe update import state too?
+            None
+        }
+        Message::AutocompleteResultsContact(contacts) => {
+            // Similar to Project results, assume regular edit state for now
+            if model.edit_state.active {
+                model.edit_state.contact_autocomplete.update_items(contacts);
+                model.log_debug(
+                    t!(
+                        "updated_contact_suggestions",
+                        count = model.edit_state.contact_autocomplete.items.len()
+                    )
+                    .to_string(),
+                );
+            }
+            None
         }
 
+        // --- Plugin View Handling ---
+        Message::PluginViewShow => {
+            model.plugin_view_state.active = true;
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                if !plugins.is_empty() {
+                    if model
+                        .plugin_view_state
+                        .plugin_list_state
+                        .selected()
+                        .is_none()
+                        || model
+                            .plugin_view_state
+                            .plugin_list_state
+                            .selected()
+                            .unwrap_or(0)
+                            >= plugins.len()
+                    {
+                        model.plugin_view_state.plugin_list_state.select(Some(0));
+                        model.plugin_view_state.selected_index = Some(0);
+                    } else {
+                        model.plugin_view_state.selected_index =
+                            model.plugin_view_state.plugin_list_state.selected();
+                    }
+                } else {
+                    model.plugin_view_state.plugin_list_state.select(None);
+                    model.plugin_view_state.selected_index = None;
+                }
+            }
+            None
+        }
+        Message::PluginViewHide => {
+            model.plugin_view_state.active = false;
+            None
+        }
+        Message::PluginViewSelectNext => {
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                let count = plugins.len();
+                if let Some(next_index) = calculate_next_index(
+                    model.plugin_view_state.plugin_list_state.selected(),
+                    count,
+                ) {
+                    model
+                        .plugin_view_state
+                        .plugin_list_state
+                        .select(Some(next_index));
+                    model.plugin_view_state.selected_index = Some(next_index);
+                }
+            }
+            None
+        }
+        Message::PluginViewSelectPrevious => {
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                let count = plugins.len();
+                if let Some(prev_index) = calculate_previous_index(
+                    model.plugin_view_state.plugin_list_state.selected(),
+                    count,
+                ) {
+                    model
+                        .plugin_view_state
+                        .plugin_list_state
+                        .select(Some(prev_index));
+                    model.plugin_view_state.selected_index = Some(prev_index);
+                }
+            }
+            None
+        }
+        Message::PluginViewSelectRow(index) => {
+            if let Some(plugin_manager) = &model.plugin_manager {
+                let plugins = plugin_manager.list_plugins();
+                let count = plugins.len();
+                if let Some(valid_index) = validate_row_index(index, count) {
+                    model
+                        .plugin_view_state
+                        .plugin_list_state
+                        .select(Some(valid_index));
+                    model.plugin_view_state.selected_index = Some(valid_index);
+                } else {
+                    model.log_warning(format!(
+                        "PluginViewSelectRow: Index {} out of bounds ({} plugins)",
+                        index, count
+                    ));
+                }
+            }
+            None
+        }
+
+        // --- Import Handling ---
+        Message::ImportTimeEntry => {
+            if !model.edit_state.active && !is_import_active(model) {
+                initialize_time_entry_import(model)
+            } else {
+                None
+            }
+        }
+
+        // --- Modal Handling ---
+        Message::ConfirmModal(modal_id) => handle_modal_close(model, modal_id, true),
+        Message::DismissModal(modal_id, is_cancel) => {
+            handle_modal_close(model, modal_id, !is_cancel)
+        }
+
+        // --- Execution Actions (triggered by modals) ---
+        Message::ExecuteExport => {
+            handle_export(model);
+            None
+        }
         Message::ExecuteDeleteTimeEntry(entry_id) => {
             model.log_notice(t!(
                 "update_deleting_time_entry",
                 entry_id = entry_id.clone()
             ));
-
             let admin_id = model.administration.id.clone().unwrap_or_default();
             let client = model.client.clone();
-
             let delete_result =
                 crate::api::delete_time_entry_by_id(&client, &admin_id, &entry_id).await;
-
             match delete_result {
                 Ok(_) => {
                     model.log_success(t!("update_time_entry_deleted", entry_id = entry_id.clone()));
@@ -1005,7 +1420,8 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                         t!("success").to_string(),
                         t!("time_entry_was_deleted_successfully").to_string(),
                     );
-                    get_time_entries(model).await;
+                    // Trigger refresh after successful deletion
+                    return Some(Message::TimeEntryRefresh);
                 }
                 Err(err) => {
                     let error_msg =
@@ -1016,331 +1432,27 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
             None
         }
-
-        Message::EditTimeEntrySelectProject => {
-            if model.edit_state.active
-                && model.edit_state.selected_field == crate::model::EditField::Project
-            {
-                model.log_notice(t!("update_log_project_select_nyi").to_string());
-            }
-            None
-        }
-
-        Message::EditTimeEntrySelectContact => {
-            if model.edit_state.active
-                && model.edit_state.selected_field == crate::model::EditField::Contact
-            {
-                model.log_notice(t!("update_log_contact_select_nyi").to_string());
-            }
-            None
-        }
-
-        Message::ToggleLogPanel => {
-            model.log_panel_state.visible = !model.log_panel_state.visible;
-            if model.log_panel_state.visible {
-                model.log_debug(t!("update_log_panel_opened").to_string());
-            } else {
-                model.log_debug(t!("update_log_panel_closed").to_string());
-            }
-            None
-        }
-
-        Message::AutocompleteKeyPress(key) => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            match edit_state.selected_field {
-                crate::model::EditField::Project => handle_autocomplete_keypress(
-                    &mut edit_state.project_autocomplete,
-                    key.code,
-                ),
-                crate::model::EditField::Contact => handle_autocomplete_keypress(
-                    &mut edit_state.contact_autocomplete,
-                    key.code,
-                ),
-                _ => return None,
-            }
-            Some(Message::AutocompleteRefresh)
-        }
-
-        Message::AutocompleteSelect => {
-            // Get the right edit state 
-            if model.import_state.active {
-                let edit_state = &mut model.import_state.edit_state;
-                match edit_state.selected_field {
-                    crate::model::EditField::Project => {
-                        if let Some(selected_project) = edit_state.project_autocomplete.selected_item() {
-                            // Add selected project to the project list if it's not already there
-                            if !model.projects.iter().any(|p| p.id == selected_project.id) {
-                                model.projects.push(selected_project.clone());
-                            }
-            
-                            let project_id = selected_project.id.clone();
-                            let project_name = selected_project.name.clone().unwrap_or_default();
-                            edit_state.project_id = project_id;
-                            edit_state.project_autocomplete.input = project_name.clone();
-                            edit_state.project_autocomplete.mark_searched();
-                            edit_state.project_autocomplete.is_dropdown_visible = false;
-                            edit_state.project_autocomplete.items.clear();
-                            model.log_notice(t!("update_selected_project", project_name = project_name));
-                        }
-                    },
-                    crate::model::EditField::Contact => {
-                        if let Some(selected_contact) = edit_state.contact_autocomplete.selected_item() {
-                            // Add selected contact to the contact list if it's not already there
-                            if !model.contacts.iter().any(|c| c.id == selected_contact.id) {
-                                model.contacts.push(selected_contact.clone());
-                            }
-            
-                            let contact_id = selected_contact.id.clone();
-                            let contact_name = selected_contact.company_name.clone().unwrap_or_default();
-                            edit_state.contact_id = contact_id;
-                            edit_state.contact_autocomplete.input = contact_name.clone();
-                            edit_state.contact_autocomplete.mark_searched();
-                            edit_state.contact_autocomplete.is_dropdown_visible = false;
-                            edit_state.contact_autocomplete.items.clear();
-                            model.log_notice(t!("update_selected_contact", contact_name = contact_name));
-                        }
-                    },
-                    _ => {}
-                }
-            } else if model.edit_state.active {
-                match model.edit_state.selected_field {
-                    crate::model::EditField::Project => handle_autocomplete_select_project(model),
-                    crate::model::EditField::Contact => handle_autocomplete_select_contact(model),
-                    _ => {}
-                }
-            }
-            None
-        }
-
-        Message::AutocompleteRefresh => {
-            if model.import_state.active {
-                let query: String;
-                let min_chars: usize;
-                
-                {
-                    let edit_state = &mut model.import_state.edit_state;
-                    match edit_state.selected_field {
-                        EditField::Project => {
-                            query = edit_state.project_autocomplete.input.clone();
-                            min_chars = edit_state.project_autocomplete.min_chars_to_search;
-                            edit_state.project_autocomplete.mark_searched();
-                        },
-                        EditField::Contact => {
-                            // Contact field uses a different async approach
-                            return handle_autocomplete_refresh_contact(model).await;
-                        },
-                        _ => return None,
-                    }
-                }
-                
-                // Now outside the mutable borrow on edit_state
-                if query.is_empty() || query.len() < min_chars {
-                    // Log first, before getting a mutable ref to edit_state again
-                    model.log_debug(format!(
-                        "Query '{}' too short or empty, cleared project items.",
-                        query
-                    ));
-                    model.import_state.edit_state.project_autocomplete.update_items(vec![]);
-                } else {
-                    // Log first
-                    model.log_debug(t!("update_filtering_local_projects", query = query.clone()));
-                    
-                    // Filter projects before getting a mutable ref to edit_state again
-                    let filtered_projects: Vec<_> = model
-                        .projects
-                        .iter()
-                        .filter(|p| {
-                            if let Some(name) = &p.name {
-                                name.to_lowercase().contains(&query.to_lowercase())
-                            } else {
-                                false
-                            }
-                        })
-                        .cloned()
-                        .collect();
-                    
-                    // Get length for logging before updating edit_state
-                    let projects_len = filtered_projects.len();
-                    
-                    // Update items
-                    model.import_state.edit_state.project_autocomplete.update_items(filtered_projects);
-                    
-                    // Log after update and with pre-calculated length
-                    model.log_debug(format!(
-                        "Local filter found {} projects.",
-                        projects_len
-                    ));
-                }
-                None
-            } else if model.edit_state.active {
-                match model.edit_state.selected_field {
-                    crate::model::EditField::Project => {
-                        return handle_autocomplete_refresh_project(model).await;
-                    }
-                    crate::model::EditField::Contact => {
-                        return handle_autocomplete_refresh_contact(model).await;
-                    }
-                    _ => {}
-                }
-                None
-            } else {
-                None
-            }
-        }
-
-        Message::AutocompleteNextItem => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            match edit_state.selected_field {
-                crate::model::EditField::Project => {
-                    handle_autocomplete_navigation(&mut edit_state.project_autocomplete, true)
-                }
-                crate::model::EditField::Contact => {
-                    handle_autocomplete_navigation(&mut edit_state.contact_autocomplete, true)
-                }
-                _ => {}
-            }
-            None
-        }
-
-        Message::AutocompletePreviousItem => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            match edit_state.selected_field {
-                crate::model::EditField::Project => handle_autocomplete_navigation(
-                    &mut edit_state.project_autocomplete,
-                    false,
-                ),
-                crate::model::EditField::Contact => handle_autocomplete_navigation(
-                    &mut edit_state.contact_autocomplete,
-                    false,
-                ),
-                _ => {}
-            }
-            None
-        }
-
-        Message::AutocompleteClearInput => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            match edit_state.selected_field {
-                crate::model::EditField::Project => {
-                    handle_autocomplete_clear(&mut edit_state.project_autocomplete)
-                }
-                crate::model::EditField::Contact => {
-                    handle_autocomplete_clear(&mut edit_state.contact_autocomplete)
-                }
-                _ => None,
-            }
-        }
-
-        Message::AutocompleteResultsProject(projects) => {
-            model.edit_state.project_autocomplete.update_items(projects);
-            model.log_debug(
-                t!(
-                    "updated_project_suggestions",
-                    count = model.edit_state.project_autocomplete.items.len()
-                )
-                .to_string(),
-            );
-            None
-        }
-
-        Message::AutocompleteResultsContact(contacts) => {
-            model.edit_state.contact_autocomplete.update_items(contacts);
-            model.log_debug(
-                t!(
-                    "updated_contact_suggestions",
-                    count = model.edit_state.contact_autocomplete.items.len()
-                )
-                .to_string(),
-            );
-            None
-        }
-
-        Message::TimeEntryCreate => {
-            model.log_notice(t!("update_log_initiating_create").to_string());
-            model.edit_state = EditState::default();
-            model.edit_state.active = true;
-            model.edit_state.time_entry_id = None;
-            model.edit_state.is_create_mode = true;
-            model.edit_state.editor = TextArea::default();
-            model.edit_state.selected_field = crate::model::EditField::Description;
-            let admin_timezone_str = model
-                .administration
-                .time_zone
-                .clone()
-                .unwrap_or_else(|| "UTC".to_string());
-            let admin_tz = admin_timezone_str
-                .parse::<chrono_tz::Tz>()
-                .unwrap_or(chrono_tz::UTC);
-            let now = chrono::Utc::now().with_timezone(&admin_tz);
-            model.edit_state.start_date = now.format("%Y-%m-%d").to_string();
-            model.edit_state.start_time = now.format("%H:%M").to_string();
-            let end_time_default = now + chrono::Duration::hours(1);
-            model.edit_state.end_date = end_time_default.format("%Y-%m-%d").to_string();
-            model.edit_state.end_time = end_time_default.format("%H:%M").to_string();
-            initialize_editor_or_autocomplete(&mut model.edit_state);
-            None
-        }
-
         Message::UserSelectNext => {
-            if !model.users.is_empty() {
-                let current_index = model.user_selection_state.selected().unwrap_or(0);
-                // Only select next if not already at the last item
-                if current_index < model.users.len() - 1 {
-                    let next_index = current_index + 1;
-                    model.user_selection_state.select(Some(next_index));
-                }
+            let count = model.users.len();
+            if let Some(next_index) =
+                calculate_next_index(model.user_selection_state.selected(), count)
+            {
+                model.user_selection_state.select(Some(next_index));
             }
             None
         }
-
         Message::UserSelectPrevious => {
-            if !model.users.is_empty() {
-                let current_index = model.user_selection_state.selected().unwrap_or(0);
-                // Only select previous if not already at the first item
-                if current_index > 0 {
-                    let prev_index = current_index - 1;
-                    model.user_selection_state.select(Some(prev_index));
-                }
+            let count = model.users.len();
+            if let Some(prev_index) =
+                calculate_previous_index(model.user_selection_state.selected(), count)
+            {
+                model.user_selection_state.select(Some(prev_index));
             }
             None
         }
-
         Message::UserConfirmSelection => {
             let mut selected_user_id: Option<String> = None;
             let mut log_no_id_error = false;
-
             if model.user_selection_active {
                 if let Some(selected_index) = model.user_selection_state.selected() {
                     if selected_index < model.users.len() {
@@ -1352,7 +1464,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     }
                 }
             }
-
             if let Some(user_id) = selected_user_id {
                 model.log_notice(t!("update_selected_user_id", user_id = user_id.clone()));
                 model.config.user_id = Some(user_id.clone());
@@ -1383,313 +1494,15 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
         }
 
-        Message::TimeEntrySelectRow(index) => {
-            if index < model.time_entries_for_table.len() {
-                model.time_entry_table_state.select(Some(index));
-            }
-            None
-        }
-
-        Message::EditTimeEntryFieldClick(field) => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
+        // --- Log Panel ---
+        Message::ToggleLogPanel => {
+            model.log_panel_state.visible = !model.log_panel_state.visible;
+            if model.log_panel_state.visible {
+                model.log_debug(t!("update_log_panel_opened").to_string());
             } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            update_edit_field_from_editor(edit_state);
-            edit_state.selected_field = field;
-            initialize_editor_or_autocomplete(edit_state);
-            model.log_debug(t!(
-                "update_debug_click_field",
-                field = format!("{:?}", field)
-            ));
-            None
-        }
-
-        Message::EditTimeEntryKeyPress(key) => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            edit_state.editor.input(key);
-            update_edit_field_from_editor(edit_state);
-            None
-        }
-
-        // Plugin View Messages
-        Message::PluginViewShow => {
-            model.plugin_view_state.active = true;
-            // Initialize selection state when showing the view
-            if let Some(plugin_manager) = &model.plugin_manager {
-                let plugins = plugin_manager.list_plugins();
-                if !plugins.is_empty() {
-                    // Select first item if nothing is selected or selection is out of bounds
-                    if model.plugin_view_state.plugin_list_state.selected().is_none() ||
-                       model.plugin_view_state.plugin_list_state.selected().unwrap_or(0) >= plugins.len() {
-                        model.plugin_view_state.plugin_list_state.select(Some(0));
-                        model.plugin_view_state.selected_index = Some(0);
-                    } else {
-                        // Ensure selected_index is synced with list_state
-                         model.plugin_view_state.selected_index = model.plugin_view_state.plugin_list_state.selected();
-                    }
-                } else {
-                    // No plugins, clear selection
-                    model.plugin_view_state.plugin_list_state.select(None);
-                    model.plugin_view_state.selected_index = None;
-                }
+                model.log_debug(t!("update_log_panel_closed").to_string());
             }
             None
         }
-        Message::PluginViewHide => {
-            model.plugin_view_state.active = false;
-            None
-        }
-        Message::PluginViewSelectNext => {
-            if let Some(plugin_manager) = &model.plugin_manager {
-                let plugins = plugin_manager.list_plugins();
-                if !plugins.is_empty() {
-                    let current_index = model.plugin_view_state.plugin_list_state.selected().unwrap_or(0);
-                    // Only select next if not already at the last item
-                    if current_index < plugins.len() - 1 {
-                        let next_index = current_index + 1;
-                        model.plugin_view_state.plugin_list_state.select(Some(next_index));
-                        model.plugin_view_state.selected_index = Some(next_index); // Keep selected_index synced
-                    }
-                }
-            }
-            None
-        }
-        Message::PluginViewSelectPrevious => {
-            if let Some(plugin_manager) = &model.plugin_manager {
-                let plugins = plugin_manager.list_plugins();
-                if !plugins.is_empty() {
-                    let current_index = model.plugin_view_state.plugin_list_state.selected().unwrap_or(0);
-                    // Only select previous if not already at the first item
-                    if current_index > 0 {
-                        let prev_index = current_index - 1;
-                        model.plugin_view_state.plugin_list_state.select(Some(prev_index));
-                        model.plugin_view_state.selected_index = Some(prev_index); // Keep selected_index synced
-                    }
-                }
-            }
-            None
-        }
-        Message::PluginViewSelectRow(index) => {
-             if let Some(plugin_manager) = &model.plugin_manager {
-                let plugins = plugin_manager.list_plugins();
-                // Check if index is valid
-                if index < plugins.len() {
-                    model.plugin_view_state.plugin_list_state.select(Some(index));
-                    model.plugin_view_state.selected_index = Some(index); // Keep selected_index synced
-                } else {
-                    // Log if index is out of bounds, maybe select last item?
-                    model.log_warning(format!("PluginViewSelectRow: Index {} out of bounds ({} plugins)", index, plugins.len()));
-                    // Optionally select the last item if index is invalid
-                    // if !plugins.is_empty() {
-                    //     let last_index = plugins.len() - 1;
-                    //     model.plugin_view_state.plugin_list_state.select(Some(last_index));
-                    //     model.plugin_view_state.selected_index = Some(last_index);
-                    // }
-                }
-            }
-            None
-        }
-
-        Message::ImportTimeEntry => {
-            if !model.edit_state.active && !is_import_active(model) {
-                initialize_time_entry_import(model)
-            } else {
-                None
-            }
-        }
-
-        Message::EditSave => {
-            if model.import_state.active {
-                return handle_import_save(model).await;
-            }
-
-            if model.edit_state.active {
-                update_edit_field_from_editor(&mut model.edit_state);
-
-                let admin_timezone_str = model
-                    .administration
-                    .time_zone
-                    .clone()
-                    .unwrap_or_else(|| "UTC".to_string());
-                let time_entry_data = model.edit_state.try_into_time_entry(&admin_timezone_str);
-
-                let is_creating = model.edit_state.time_entry_id.is_none();
-                let admin_id = model.administration.id.clone().unwrap_or_default();
-                let client = model.client.clone();
-                let user_id = model.config.user_id.clone().unwrap_or_default();
-
-                // Make sure description is not empty
-                if model.edit_state.description.is_empty() {
-                    ui::show_error(model, t!("update_description_required"));
-                    return None;
-                }
-
-                if is_creating {
-                    model.log_notice(format!(
-                        "Creating new time entry: {}",
-                        model.edit_state.description
-                    ));
-                    let endpoint = "time_entries.json";
-                    crate::api::log_debug_curl(model, endpoint, "POST");
-
-                    match crate::api::create_time_entry(
-                        &client,
-                        &admin_id,
-                        &user_id,
-                        time_entry_data,
-                    )
-                    .await
-                    {
-                        Ok(created_entry) => {
-                            model.log_success(
-                                t!(
-                                    "time_entry_created_successfully",
-                                    id = created_entry.id.clone().unwrap_or_default()
-                                )
-                                .to_string(),
-                            );
-                            ui::show_info(
-                                model,
-                                "create_success",
-                                t!("success").to_string(),
-                                t!("time_entry_was_created_successfully").to_string(),
-                            );
-                            get_time_entries(model).await;
-                        }
-                        Err(err) => {
-                            let error_msg =
-                                t!("update_failed_create_time_entry", error = err.to_string())
-                                    .to_string();
-                            model.log_error(error_msg.clone());
-                            crate::ui::show_error(model, error_msg);
-                        }
-                    }
-                } else if let Some(entry_id) = &model.edit_state.time_entry_id {
-                    let entry_id = entry_id.clone();
-                    model.log_notice(t!(
-                        "updating_time_entry_notice",
-                        entry_id = entry_id.clone(),
-                        description = model.edit_state.description.clone()
-                    ));
-                    let endpoint = format!("time_entries/{}.json", entry_id);
-                    crate::api::log_debug_curl(model, &endpoint, "PATCH");
-
-                    match crate::api::update_time_entry_by_id(
-                        &client,
-                        &admin_id,
-                        &entry_id,
-                        time_entry_data,
-                    )
-                    .await
-                    {
-                        Ok(updated_entry) => {
-                            if let Some(index) = model
-                                .time_entries
-                                .iter()
-                                .position(|entry| entry.id == Some(entry_id.clone()))
-                            {
-                                if let Some(table_index) = model
-                                    .time_entries_for_table
-                                    .iter()
-                                    .position(|t_entry| t_entry.id == entry_id)
-                                {
-                                    model.time_entries[index] = updated_entry.clone();
-                                    model.time_entries_for_table[table_index] = TimeEntryForTable {
-                                        id: updated_entry.id.clone().unwrap_or_default(),
-                                        customer: updated_entry
-                                            .contact
-                                            .clone()
-                                            .unwrap_or_default()
-                                            .company_name
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        project: updated_entry
-                                            .project
-                                            .clone()
-                                            .unwrap_or_default()
-                                            .name
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        description: updated_entry
-                                            .description
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        started_at: updated_entry
-                                            .started_at
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        ended_at: updated_entry
-                                            .ended_at
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        billable: updated_entry.billable.unwrap_or_default(),
-                                        source: "moneybird".to_string(),
-                                        icon: None,
-                                        plugin_name: None,
-                                    };
-                                    if let Some(backup_index) = model
-                                        .time_entries_for_table_backup
-                                        .iter()
-                                        .position(|t_entry| t_entry.id == entry_id)
-                                    {
-                                        model.time_entries_for_table_backup[backup_index] =
-                                            model.time_entries_for_table[table_index].clone();
-                                    }
-                                }
-                            }
-                            model.log_success(t!(
-                                "time_entry_updated_successfully",
-                                id = entry_id.clone()
-                            ));
-                            ui::show_info(
-                                model,
-                                "update_success",
-                                t!("success").to_string(),
-                                t!("time_entry_was_updated_successfully").to_string(),
-                            );
-                        }
-                        Err(err) => {
-                            let error_msg =
-                                t!("update_failed_update_time_entry", error = err.to_string())
-                                    .to_string();
-                            model.log_error(error_msg.clone());
-                            crate::ui::show_error(model, error_msg);
-                        }
-                    }
-                }
-                model.edit_state = EditState::default();
-            }
-            None
-        }
-
-        Message::EditCancel => {
-            if model.import_state.active {
-                model.import_state.active = false;
-                model.import_state.edit_state = EditState::default();
-                model.import_state.original_entry = None;
-                return None;
-            }
-
-            if model.edit_state.active {
-                model.edit_state.active = false;
-                model.log_notice(t!("canceled_editing").to_string());
-            }
-            None
-        }
-
     }
 }
