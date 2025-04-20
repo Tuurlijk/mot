@@ -197,7 +197,7 @@ impl KeyDebounce {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct TimeEntryForTable {
     pub id: String,
     pub customer: String,
@@ -210,21 +210,24 @@ pub(crate) struct TimeEntryForTable {
     pub icon: Option<String>, // Custom icon from plugin manifest
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct EditState {
-    pub(crate) active: bool,
-    pub(crate) entry_id: String,    // ID of the time entry being edited
-    pub(crate) description: String, // Description text
-    pub(crate) project_id: Option<String>, // Selected project ID
-    pub(crate) project_name: Option<String>, // Selected project name
-    pub(crate) contact_id: Option<String>, // Selected contact ID
-    pub(crate) contact_name: Option<String>, // Selected contact name
-    pub(crate) start_date: String,  // Start date value
-    pub(crate) start_time: String,  // Start time value
-    pub(crate) end_date: String,    // End date value
-    pub(crate) end_time: String,    // End time value
-    pub(crate) editor: TextArea<'static>, // Shared editor for all fields
-    pub(crate) selected_field: EditField, // Currently selected field
+/// State for editing a time entry
+#[derive(Debug, Default, Clone)]
+pub struct EditState {
+    pub active: bool,
+    pub is_create_mode: bool,
+    pub selected_field: EditField,
+    pub description: String,
+    pub contact_id: Option<String>,
+    pub contact_name: String, // Display name
+    pub project_id: Option<String>,
+    pub project_name: String, // Display name
+    pub start_time: String,   // HH:MM format
+    pub end_time: String,     // HH:MM format
+    pub start_date: String,   // YYYY-MM-DD format
+    pub end_date: String,     // YYYY-MM-DD format
+    pub time_entry_id: Option<String>, // Only set when editing existing
+    pub editor: TextArea<'static>,       // Active text input
+    pub field_x_offset: usize,            // Text offset in editor
 
     // Autocomplete state for project selection
     pub(crate) project_autocomplete: AutocompleteState<Project>,
@@ -234,6 +237,14 @@ pub(crate) struct EditState {
 
     // Areas of each field for click detection
     pub(crate) field_areas: std::collections::HashMap<EditField, Rect>,
+}
+
+/// State for importing a time entry from a plugin into Moneybird
+#[derive(Debug, Default, Clone)]
+pub struct ImportState {
+    pub active: bool,
+    pub original_entry: Option<TimeEntryForTable>,
+    pub edit_state: EditState,
 }
 
 impl EditState {
@@ -292,7 +303,7 @@ impl EditState {
         let ended_at = end_in_admin_tz.with_timezone(&Utc).to_rfc3339();
 
         crate::moneybird::types::TimeEntry {
-            id: Some(self.entry_id.clone()),
+            id: self.time_entry_id.clone(),
             description: Some(self.description.clone()),
             project_id: self.project_id.clone(),
             project: Some(Project {
@@ -408,6 +419,8 @@ pub(crate) struct AppModel {
     pub plugin_manager: Option<crate::plugin::PluginManager>,
     pub plugin_entries: Vec<TimeEntryForTable>,
     pub plugin_view_state: PluginViewState,
+    // Import state (for importing plugin entries to Moneybird)
+    pub import_state: ImportState,
 }
 
 impl Default for AppModel {
@@ -440,6 +453,7 @@ impl Default for AppModel {
             plugin_manager: None,
             plugin_entries: Vec::new(),
             plugin_view_state: PluginViewState::default(),
+            import_state: ImportState::default(),
         }
     }
 }

@@ -307,8 +307,8 @@ fn view(model: &mut AppModel, frame: &mut Frame) {
     } else if model.plugin_view_state.active {
         // If plugin view is active, render the plugins list
         ui::render_plugins(model, main_area, frame);
-    } else if model.edit_state.active {
-        // When in edit mode, show the edit form
+    } else if model.edit_state.active || model.import_state.active {
+        // When in edit mode or import mode, show the edit form
         ui::render_time_entry_edit(model, main_area, frame);
     } else {
         // Normal view with time entries

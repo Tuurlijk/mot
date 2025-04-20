@@ -273,6 +273,26 @@ pub(crate) fn format_time_range_from_time_entry(
     )
 }
 
+/// Parse a datetime string into separate date and time components for the edit form
+pub fn parse_datetime_for_edit(datetime_str: &str, timezone: &str) -> (Option<String>, Option<String>) {
+    // Parse the datetime string
+    match parse_iso_datetime(datetime_str, timezone) {
+        Some(dt) => {
+            // Format the date as YYYY-MM-DD
+            let date = dt.format("%Y-%m-%d").to_string();
+            // Format the time as HH:MM
+            let time = dt.format("%H:%M").to_string();
+            (Some(date), Some(time))
+        }
+        None => (None, None)
+    }
+}
+
+/// Format date and time components into an ISO8601 datetime string
+pub fn format_datetime_from_edit(date: &str, time: &str) -> String {
+    format!("{}T{}:00Z", date, time)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
