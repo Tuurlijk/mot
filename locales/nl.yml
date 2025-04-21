@@ -6,6 +6,7 @@ cmd_export_help: "Exporteer tijdregistraties naar een csv bestand"
 cmd_week_help: "Weeknummer om te exporteren"
 cmd_query_help: "Filter zoekopdracht"
 cmd_language_help: "Stel de weergavetaal in (bijv. en, nl)"
+cmd_plugin_debug_help: "Debug plugin initialisatieproblemen voor een specifieke plugin"
 
 # Error messages
 error_no_users: "Geen gebruikers gevonden voor deze administratie. Kan niet doorgaan."
@@ -246,10 +247,27 @@ plugin_name_mismatch: "Plugin naam '%{manifest_name}' komt niet overeen met dire
 plugin_initialized: "Plugin geïnitialiseerd: %{name}"
 plugin_init_failed: "Initialisatie van plugin %{name} mislukt: %{error}"
 plugin_init_error: "Fout bij initialiseren van plugin %{name}: %{error}"
+plugin_init_error_config_not_found: "Configuratiebestand niet gevonden voor plugin %{name} op %{path}"
+plugin_init_error_config_not_readable: "Kan configuratiebestand niet lezen voor plugin %{name} op %{path}: %{error}"
+plugin_init_rejected: "Plugin %{name} heeft initialisatie geweigerd: %{error}"
+plugin_init_internal_error: "Plugin %{name} rapporteerde een interne fout: %{error}"
+plugin_init_communication_error: "Communicatiefout met plugin %{name}: %{error}"
 plugin_get_entries_error: "Fout bij ophalen van items van %{name}: %{error}"
 plugin_shutdown_error: "Fout bij afsluiten van plugin %{name}: %{error}"
 plugin_entries_loaded: "%{count} tijdregistraties geladen van plugins"
 plugin_error: "Plugin '%{name}' fout: %{error}"
+
+# Plugin debugging
+debugging_plugin: "Plugin debuggen: %{name}"
+plugin_debug_result: "Plugin '%{name}' Debug Resultaat"
+plugin_debug_failed: "Debuggen van plugin %{name} mislukt: %{error}"
+plugin_manager_not_available: "Plugin manager is niet beschikbaar"
+plugin_returned_empty_response: "Plugin gaf een leeg antwoord. Controleer of het correct verwerkt wordt."
+plugin_error_invalid_json_response: "FOUT: De plugin gaf een ongeldig JSON-antwoord.\nHet antwoord moet een geldig JSON-object of array zijn."
+plugin_error_parse_failed: "FOUT: Kon het antwoord niet als geldige JSON verwerken: %{error}"
+plugin_debug_valid_entries: "✅ %{count} geldige tijdregistraties gevonden in het resultaat"
+plugin_error_invalid_time_entries: "FOUT: Kon het antwoord niet verwerken als tijdregistraties: %{error}"
+plugin_warning_expected_array: "WAARSCHUWING: Een array van tijdregistraties verwacht, maar een enkel object ontvangen.\nControleer of je plugin het juiste formaat teruggeeft."
 
 # UI - Plugin View
 ui_plugins_title: "Plugins"

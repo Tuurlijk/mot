@@ -18,6 +18,9 @@ pub enum Message {
     ConfirmModal(String),
     DismissModal(String, bool),
 
+    // Debug message for plugin development
+    DebugPluginResponse(String),
+
     EditTimeEntry,
     EditTimeEntryCancel,
     EditTimeEntryFieldClick(crate::model::EditField),
@@ -187,6 +190,22 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             KeyCode::Down | KeyCode::Char('j') => return Some(Message::PluginViewSelectNext),
             KeyCode::Esc | KeyCode::Char('p') => return Some(Message::PluginViewHide),
             KeyCode::Char('q') => return Some(Message::Quit), // Allow quitting
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Debug selected plugin
+                if let Some(idx) = model.plugin_view_state.selected_index {
+                    let plugins = if let Some(manager) = &model.plugin_manager {
+                        manager.list_plugins()
+                    } else {
+                        vec![]
+                    };
+                    
+                    if idx < plugins.len() {
+                        let plugin_name = plugins[idx].name.clone();
+                        return Some(Message::DebugPluginResponse(plugin_name));
+                    }
+                }
+                return None;
+            },
             _ => return None,                                 // Ignore other keys in this mode
         }
     }

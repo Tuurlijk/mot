@@ -1306,5 +1306,122 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             model.plugin_view_state.active = true;
             None
         }
+        
+        Message::DebugPluginResponse(plugin_name) => {
+            model.log_notice(t!("debugging_plugin", name = plugin_name.clone()));
+            
+            // Get the current date and a date 24 hours later for testing
+            let now = chrono::Utc::now();
+            let tomorrow = now + chrono::Duration::hours(24);
+            
+            if let Some(plugin_manager) = &mut model.plugin_manager {
+                match plugin_manager.debug_plugin_response(&plugin_name, &now, &tomorrow).await {
+                    Ok(result_json) => {
+                        // Create a diagnostic message to show the developer
+                        let diagnostic_modal_id = "plugin_debug_response";
+                        let diagnostic_title = t!("plugin_debug_result", name = plugin_name);
+                        
+                        // Create a formatted version of the response with line numbers
+                        let formatted_response = if result_json.trim().is_empty() {
+                            t!("plugin_returned_empty_response").to_string()
+                        } else {
+                            // Add helpful diagnostic info for common issues
+                            let mut diagnostic_info = String::new();
+                            
+                            // The debug_plugin_response method only returns the result field,
+                            // so we're analyzing the time entries array, not the JSON-RPC envelope
+                            if result_json.trim().starts_with("[") {
+                                // This is good - we expect an array of time entries
+                                match serde_json::from_str::<Vec<PluginTimeEntry>>(&result_json) {
+                                    Ok(entries) => {
+                                        diagnostic_info.push_str(&t!(
+                                            "plugin_debug_valid_entries", 
+                                            count = entries.len().to_string()
+                                        ));
+                                        diagnostic_info.push_str("\n\n");
+                                        
+                                        // Check for required fields in entries
+                                        if !entries.is_empty() {
+                                            for (i, entry) in entries.iter().enumerate() {
+                                                let mut field_issues = Vec::new();
+                                                
+                                                if entry.id.is_empty() {
+                                                    field_issues.push("id");
+                                                }
+                                                if entry.description.is_empty() {
+                                                    field_issues.push("description");
+                                                }
+                                                if entry.started_at.is_empty() {
+                                                    field_issues.push("started_at");
+                                                }
+                                                if entry.ended_at.is_empty() {
+                                                    field_issues.push("ended_at");
+                                                }
+                                                
+                                                if !field_issues.is_empty() {
+                                                    diagnostic_info.push_str(&format!(
+                                                        "Entry #{}: Missing required fields: {}\n",
+                                                        i + 1,
+                                                        field_issues.join(", ")
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        diagnostic_info.push_str(&t!(
+                                            "plugin_error_invalid_time_entries",
+                                            error = e.to_string()
+                                        ));
+                                        diagnostic_info.push_str("\n\n");
+                                    }
+                                }
+                            } else if !result_json.trim().starts_with("{") {
+                                // Not a valid JSON object or array
+                                diagnostic_info.push_str(&t!("plugin_error_invalid_json_response"));
+                                diagnostic_info.push_str("\n\n");
+                            } else {
+                                // Got a single object instead of an array - probably an error
+                                diagnostic_info.push_str(&t!("plugin_warning_expected_array"));
+                                diagnostic_info.push_str("\n\n");
+                            }
+                            
+                            // Format with line numbers and add the diagnostic info
+                            let mut formatted = String::new();
+                            if !diagnostic_info.is_empty() {
+                                formatted.push_str(&diagnostic_info);
+                                formatted.push_str("---\n");
+                            }
+                            
+                            for (i, line) in result_json.lines().enumerate() {
+                                formatted.push_str(&format!("{:03}: {}\n", i + 1, line));
+                            }
+                            
+                            formatted
+                        };
+                        
+                        ui::show_modal(
+                            model,
+                            crate::ui::ModalData {
+                                title: diagnostic_title.to_string(),
+                                message: formatted_response,
+                                modal_type: crate::ui::ModalType::Info,
+                                id: Some(diagnostic_modal_id.to_string()),
+                                ..Default::default()
+                            },
+                        );
+                    },
+                    Err(err) => {
+                        let error_msg = t!("plugin_debug_failed", name = plugin_name, error = err.to_string()).to_string();
+                        model.log_error(error_msg.clone());
+                        ui::show_error(model, error_msg);
+                    }
+                }
+            } else {
+                ui::show_error(model, t!("plugin_manager_not_available"));
+            }
+            
+            None
+        }
     }
 }

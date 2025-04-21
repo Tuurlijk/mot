@@ -28,13 +28,15 @@ config = "0.15.11"
 chrono = { version = "0.4.40", features = ["serde"] }
 chrono-tz = "0.10.3"
 toml = "0.8.8"
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync"] }
 
 # Utils
 supports-color = "3.0.0"
 terminal-light = "1.7.0"
 rust-i18n = "3.1.4"
 locale_config = "0.3.0"
+jsonrpsee = { version = "0.22.0", features = ["full"] }
+log = "0.4"
 
 [build-dependencies]
 prettyplease = "0.2.22"

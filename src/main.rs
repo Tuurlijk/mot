@@ -89,32 +89,42 @@ async fn main() -> color_eyre::Result<()> {
     // Initialize plugin system
     if let Ok(mut manager) = plugin::PluginManager::new() {
         // Discover plugins
-        let discover_results = manager.discover_plugins()?;
-        
-        // Display results
-        if discover_results.is_empty() {
-            println!("No plugins found or loaded");
-        } else {
-            for (_path, result) in discover_results {
-                match result {
-                    Ok(msg) => println!("✅ {}", msg),
-                    Err(err) => println!("❌ {}", err),
+        match manager.discover_plugins().await {
+            Ok(discover_results) => {
+                // Display results
+                if discover_results.is_empty() {
+                    println!("No plugins found or loaded");
+                } else {
+                    for (_path, result) in discover_results {
+                        match result {
+                            Ok(msg) => println!("✅ {}", msg),
+                            Err(err) => println!("❌ {}", err),
+                        }
+                    }
+                }
+                
+                // Initialize the plugins
+                match manager.initialize_plugins().await {
+                    Ok(init_results) => {
+                        // Display initialization results
+                        for (plugin_name, result) in init_results {
+                            match result {
+                                Ok(_) => println!("✅ Initialized plugin: {}", plugin_name),
+                                Err(err) => println!("❌ Failed to initialize plugin {}: {}", plugin_name, err),
+                            }
+                        }
+                        
+                        model.plugin_manager = Some(manager);
+                    }
+                    Err(e) => {
+                        println!("Failed to initialize plugins: {}", e);
+                    }
                 }
             }
-        }
-        
-        // Initialize the plugins
-        let init_results = manager.initialize_plugins()?;
-        
-        // Display initialization results
-        for (plugin_name, result) in init_results {
-            match result {
-                Ok(_) => println!("✅ Initialized plugin: {}", plugin_name),
-                Err(err) => println!("❌ Failed to initialize plugin {}: {}", plugin_name, err),
+            Err(e) => {
+                println!("Failed to discover plugins: {}", e);
             }
         }
-        
-        model.plugin_manager = Some(manager);
     } else {
         println!("Plugin system not available");
     }
@@ -231,6 +241,28 @@ async fn main() -> color_eyre::Result<()> {
         api::get_time_entries(&mut model).await;
     }
 
+    // Handle plugin debug command if provided
+    if let Some(plugin_name) = args.plugin_debug {
+        if let Some(plugin_manager) = model.plugin_manager.as_mut() {
+            match plugin_manager.debug_plugin_initialization(&plugin_name).await {
+                Ok(debug_report) => {
+                    // Return early with the debug report
+                    println!("{}", debug_report);
+                    // Clean up and exit
+                    if let Err(e) = plugin_manager.shutdown().await {
+                        eprintln!("Error shutting down plugins: {}", e);
+                    }
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(eyre::eyre!("Failed to debug plugin '{}': {}", plugin_name, e));
+                }
+            }
+        } else {
+            return Err(eyre::eyre!("Plugin system not available"));
+        }
+    }
+
     if args.export {
         if model.has_blocking_error() {
             // Display model.modal_stack.top() title using eyre
@@ -264,7 +296,7 @@ async fn main() -> color_eyre::Result<()> {
 
     // Clean up and exit
     if let Some(plugin_manager) = model.plugin_manager.as_mut() {
-        match plugin_manager.shutdown() {
+        match plugin_manager.shutdown().await {
             Ok(errors) => {
                 // Handle any shutdown errors
                 for (plugin_name, error_msg) in errors {

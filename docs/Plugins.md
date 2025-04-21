@@ -2,6 +2,19 @@
 
 Mot includes a plugin system that allows developers to integrate time entries from external sources. Plugins use a simple JSON-RPC protocol over stdin/stdout, making them easy to implement in any language.
 
+## Table of Contents
+- [Overview](#overview)
+- [Plugin Setup](#plugin-setup)
+  - [Location](#location)
+  - [Required Files](#required-files)
+- [Communication Protocol](#communication-protocol)
+  - [JSON-RPC Format](#json-rpc-format)
+  - [Required Methods](#required-methods)
+- [Data Structures](#data-structures)
+- [Example Plugins](#example-plugins)
+- [Debugging Guide](#debugging-plugins)
+- [Security and Limitations](#security-and-limitations)
+
 ## Overview
 
 The plugin system allows mot to:
@@ -10,15 +23,17 @@ The plugin system allows mot to:
 - Fetch time entries from external sources
 - Display these entries in the main time entry table
 
-## Plugin Location
+## Plugin Setup
+
+### Location
 
 Plugins are discovered in the following location:
 - **Linux/macOS**: `~/.config/mot/plugins/`
 - **Windows**: `%APPDATA%\mot\plugins\`
 
-Each plugin should be placed in its own subdirectory, with the directory name matching the plugin's name.
+Each plugin should be placed in its own subdirectory within the plugins folder. The directory name does not need to match the plugin's name in the manifest.toml file. MOT will use the name specified in the manifest.toml file for internal identification and display purposes.
 
-## Required Files
+### Required Files
 
 A plugin directory must contain:
 
@@ -26,7 +41,7 @@ A plugin directory must contain:
 2. **config.toml** - Plugin configuration
 3. **Executable** - The plugin binary or script
 
-### manifest.toml
+#### manifest.toml
 
 This file defines the plugin metadata and executable information:
 
@@ -44,7 +59,7 @@ windows = "plugin-executable.exe"  # For Windows (optional)
 
 > **Note:** The plugin name in the manifest can be any string (e.g., "Hello?" or "my-company/gitlab-plugin") and doesn't need to match the directory name. MOT will use this name to identify the plugin internally and for displaying icons.
 
-### config.toml
+#### config.toml
 
 This file contains configuration parameters for the plugin:
 
@@ -57,19 +72,24 @@ base_url = "https://api.example.com"
 
 The plugin will be provided with the path to this file during initialization.
 
-### Executable
+#### Executable
 
 This is the actual plugin code (binary or script) that implements the JSON-RPC interface. The executable must:
 
 - Accept input on stdin (JSON-RPC requests)
 - Produce output on stdout (JSON-RPC responses)
 - Be executable (file permissions `+x` on Unix-like systems)
+- Run continuously (don't exit after handling a single request)
 
-## Plugin Protocol
+## Communication Protocol
 
 Plugins communicate with mot using the JSON-RPC 2.0 protocol over stdin/stdout.
 
-### Request Format
+### JSON-RPC Format
+
+> **⚠️ IMPORTANT:** All communication must follow the JSON-RPC 2.0 specification. Each request and response must include the `jsonrpc`, `id`, and either `method`+`params` (for requests) or `result`/`error` (for responses). Responses must always wrap your data in this format - returning raw data arrays without the JSON-RPC envelope will cause errors.
+
+#### Request Format
 
 ```json
 {
@@ -83,7 +103,7 @@ Plugins communicate with mot using the JSON-RPC 2.0 protocol over stdin/stdout.
 }
 ```
 
-### Response Format
+#### Response Format
 
 ```json
 {
@@ -95,7 +115,7 @@ Plugins communicate with mot using the JSON-RPC 2.0 protocol over stdin/stdout.
 }
 ```
 
-### Error Response Format
+#### Error Response Format
 
 ```json
 {
@@ -108,11 +128,11 @@ Plugins communicate with mot using the JSON-RPC 2.0 protocol over stdin/stdout.
 }
 ```
 
-## Supported Methods
+### Required Methods
 
-The plugin must implement the following methods:
+Your plugin must implement the following methods:
 
-### 1. `initialize`
+#### 1. `initialize`
 
 Called when mot starts or discovers the plugin.
 
@@ -137,7 +157,7 @@ Called when mot starts or discovers the plugin.
 }
 ```
 
-### 2. `get_time_entries`
+#### 2. `get_time_entries`
 
 Called to retrieve time entries for a specific date range.
 
@@ -153,6 +173,8 @@ Called to retrieve time entries for a specific date range.
   "id": 2
 }
 ```
+
+> **Note:** All date/time values in the plugin protocol use UTC timezone (indicated by the 'Z' suffix in RFC3339 format). Your plugin should expect and handle UTC dates consistently.
 
 **Expected Response:**
 ```json
@@ -178,7 +200,7 @@ Called to retrieve time entries for a specific date range.
 }
 ```
 
-### 3. `shutdown`
+#### 3. `shutdown`
 
 Called when mot is closing or unloading the plugin.
 
@@ -201,9 +223,9 @@ Called when mot is closing or unloading the plugin.
 }
 ```
 
-## Time Entry Object Structure
+## Data Structures
 
-Time entries should be formatted as follows:
+### Time Entry Object
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -222,11 +244,13 @@ Time entries should be formatted as follows:
 
 > **Note:** The `plugin_name` field will be automatically populated by MOT with the plugin's manifest name - you don't need to include this field in your returned time entries.
 
-## Example Plugin
+## Example Plugins
 
-Here's a minimal example of a bash plugin that returns a static time entry:
+### Bash Example
 
-### manifest.toml
+A minimal example of a bash plugin that returns a static time entry:
+
+#### manifest.toml
 ```toml
 [plugin]
 name = "hello"
@@ -238,13 +262,13 @@ default = "hello.sh"
 windows = "hello.sh"  # Same for Windows, but would need modifications to work
 ```
 
-### config.toml
+#### config.toml
 ```toml
 # Hello Plugin Configuration
 enabled = true
 ```
 
-### hello.sh
+#### hello.sh
 ```bash
 #!/bin/bash
 
@@ -315,44 +339,8 @@ Make sure to make the script executable:
 chmod +x hello.sh
 ```
 
-## Debugging Plugins
+### Python Example
 
-If your plugin isn't working as expected:
-
-1. Check the mot logs (F12 key to toggle log panel)
-2. Ensure your plugin correctly reads from stdin and writes to stdout
-3. Verify JSON responses are correctly formatted
-4. Check that your plugin executable has proper permissions
-5. Test your plugin manually by providing JSON-RPC requests to stdin
-6. Add debug logging to a file for detailed troubleshooting
-
-### Adding Debug Logging
-
-For troubleshooting, you can add logging to your plugin. Here's an example for bash:
-
-```bash
-# Add at the top of your bash script
-exec 2> "/path/to/debug.log"
-log_debug() { echo "[$(date +"%Y-%m-%dT%H:%M:%S")] $1" >&2; }
-log_debug "Plugin started"
-```
-
-## Common Error Codes
-
-| Code | Description |
-|------|-------------|
-| -32700 | Parse error - invalid JSON |
-| -32600 | Invalid request - malformed JSON-RPC |
-| -32601 | Method not found |
-| -32602 | Invalid params |
-| -32603 | Internal error |
-| -32000 to -32099 | Server error (implementation specific) |
-
-## Integration with Other Languages
-
-The plugin system works with any language that can read from stdin and write to stdout. Here are a few examples:
-
-### Python
 ```python
 #!/usr/bin/env python3
 import json
@@ -445,7 +433,8 @@ for line in sys.stdin:
         sys.stdout.flush()
 ```
 
-### Node.js
+### Node.js Example
+
 ```javascript
 #!/usr/bin/env node
 const readline = require('readline');
@@ -545,13 +534,84 @@ rl.on('line', (line) => {
 });
 ```
 
-## Security Considerations
+## Debugging Plugins
+
+If your plugin isn't working as expected:
+
+### Common Issues and Solutions
+
+1. **JSON-RPC format issues**: Always return properly formatted JSON-RPC responses
+2. **Plugin exiting early**: Ensure your plugin runs in a continuous loop
+3. **Permissions problems**: Make sure your plugin is executable
+4. **Date/time handling**: Handle UTC dates correctly
+5. **Missing output flushing**: Always flush stdout after writing
+
+### Built-in Debug Mode
+
+MOT includes a built-in debug mode to help diagnose plugin issues:
+
+1. Press 'p' to open the plugin view
+2. Select the plugin you want to debug
+3. Press Ctrl+D to run the plugin in debug mode
+4. MOT will send a test request to the plugin and display the raw response
+
+### Debug Logging
+
+For troubleshooting, add logging to your plugin:
+
+```bash
+# Bash example
+exec 2> "/path/to/debug.log"
+log_debug() { echo "[$(date +"%Y-%m-%dT%H:%M:%S")] $1" >&2; }
+log_debug "Plugin started"
+```
+
+```python
+# Python example
+import logging
+logging.basicConfig(filename='/path/to/debug.log', level=logging.DEBUG)
+logging.debug("Plugin started")
+```
+
+### Common Mistakes
+
+1. **Missing JSON-RPC wrapper**: The most common error is returning just the time entries array without the JSON-RPC wrapper. Always format your response as:
+   ```json
+   {
+     "jsonrpc": "2.0",
+     "result": [ your_time_entries_array ],
+     "id": request_id_from_incoming_request
+   }
+   ```
+
+2. **Not reading the request ID**: Each response must include the same ID that was in the request.
+
+3. **Forgetting to flush output**: Some languages buffer stdout. Always flush after writing (e.g., `sys.stdout.flush()` in Python).
+
+4. **JSON escaping issues**: When constructing JSON manually (like in bash), ensure all quotes are properly escaped.
+
+5. **Exiting after handling a request**: Your plugin should continue running in a loop to handle multiple requests.
+
+### Error Codes
+
+| Code | Description |
+|------|-------------|
+| -32700 | Parse error - invalid JSON |
+| -32600 | Invalid request - malformed JSON-RPC |
+| -32601 | Method not found |
+| -32602 | Invalid params |
+| -32603 | Internal error |
+| -32000 to -32099 | Server error (implementation specific) |
+
+## Security and Limitations
+
+### Security Considerations
 
 - Plugins have access to the system they run on. Be careful with third-party plugins.
 - Sensitive information (like API tokens) should be stored securely in the plugin's config file.
 - Validate and sanitize all data between mot and plugins.
 
-## Limitations
+### Limitations
 
 - Plugins can only add time entries, not modify existing Moneybird entries.
 - Plugin time entries are read-only within mot.

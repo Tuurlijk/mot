@@ -6,6 +6,7 @@ cmd_export_help: "Export time entries to a csv file"
 cmd_week_help: "Week number to export"
 cmd_query_help: "Filter query"
 cmd_language_help: "Set the display language (e.g., en, nl)"
+cmd_plugin_debug_help: "Debug plugin initialization issues for a specific plugin"
 
 # Error messages
 error_no_users: "No users found for this administration. Cannot proceed."
@@ -246,10 +247,27 @@ plugin_name_mismatch: "Plugin name '%{manifest_name}' doesn't match directory na
 plugin_initialized: "Initialized plugin: %{name}"
 plugin_init_failed: "Failed to initialize plugin %{name}: %{error}"
 plugin_init_error: "Error initializing plugin %{name}: %{error}"
+plugin_init_error_config_not_found: "Configuration file not found for plugin %{name} at %{path}"
+plugin_init_error_config_not_readable: "Cannot read configuration file for plugin %{name} at %{path}: %{error}"
+plugin_init_rejected: "Plugin %{name} rejected initialization: %{error}"
+plugin_init_internal_error: "Plugin %{name} reported an internal error: %{error}"
+plugin_init_communication_error: "Communication error with plugin %{name}: %{error}"
 plugin_get_entries_error: "Error getting entries from %{name}: %{error}"
 plugin_shutdown_error: "Error shutting down plugin %{name}: %{error}"
 plugin_entries_loaded: "Loaded %{count} time entries from plugins"
 plugin_error: "Plugin '%{name}' error: %{error}"
+
+# Plugin debugging
+debugging_plugin: "Debugging plugin: %{name}"
+plugin_debug_result: "Plugin '%{name}' Debug Response"
+plugin_debug_failed: "Failed to debug plugin %{name}: %{error}"
+plugin_manager_not_available: "Plugin manager is not available"
+plugin_returned_empty_response: "Plugin returned an empty response. Check if it's processing requests correctly."
+plugin_error_invalid_json_response: "ERROR: The plugin returned an invalid JSON response.\nThe response must be a valid JSON object or array."
+plugin_error_parse_failed: "ERROR: Could not parse the response as valid JSON: %{error}"
+plugin_debug_valid_entries: "✅ Found %{count} valid time entries in the result"
+plugin_error_invalid_time_entries: "ERROR: Could not parse the response as time entries: %{error}"
+plugin_warning_expected_array: "WARNING: Expected an array of time entries, but received a single object.\nCheck if your plugin is returning the correct format."
 
 # UI - Plugin View
 ui_plugins_title: "Plugins"

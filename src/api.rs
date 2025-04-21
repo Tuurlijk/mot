@@ -439,7 +439,7 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
                 let end_utc = end.with_timezone(&chrono::Utc);
                 
                 // Get time entries from all plugins
-                match plugin_manager.get_all_time_entries(&start_utc, &end_utc) {
+                match plugin_manager.get_all_time_entries(&start_utc, &end_utc).await {
                     Ok((plugin_entries, errors)) => {
                         // First, store the plugin errors for later
                         let plugin_errors = errors;
