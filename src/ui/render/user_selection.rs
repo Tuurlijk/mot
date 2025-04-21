@@ -16,7 +16,7 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
         Shortcut::Pair("Esc", t!("ui_shortcut_exit_user_selection").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     // Create ListItems instead of Rows
     let items: Vec<ListItem> = model.users.iter().map(|user| {

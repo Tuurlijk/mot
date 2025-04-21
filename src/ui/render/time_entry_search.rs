@@ -19,7 +19,7 @@ pub fn render_search(model: &mut AppModel, area: Rect, frame: &mut Frame) {
         Shortcut::Pair("Ctrl+U", t!("ui_shortcut_clear").as_ref()),
     ])
     .with_alignment(Alignment::Left)
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     let block = Block::default()
         .padding(Padding {

@@ -1,7 +1,6 @@
 use crate::{
-    model::EditField,
+    model::{AppModel, EditField, EditType},
     ui::{Autocomplete, Shortcut, Shortcuts},
-    AppModel,
 };
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::prelude::Stylize;
@@ -12,20 +11,19 @@ use rust_i18n::t;
 
 /// Render the time entry edit form
 pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Frame) {
-    // Determine if we're in regular edit mode or import mode
-    let is_import = model.import_state.active;
+    // Check if we're in import mode
+    let is_import = model.edit_state.is_import_mode();
     
-    // Get the appropriate edit state
-    let edit_state = if is_import {
-        &mut model.import_state.edit_state
-    } else {
-        &mut model.edit_state
-    };
+    // Get a reference to the edit state
+    let edit_state = &mut model.edit_state;
     
-    // If the edit state is not active, don't render anything
+    // If edit form is not active, return early
     if !edit_state.active {
         return;
     }
+    
+    // Cache the area for later use
+    model.edit_form_area = Some(area);
     
     // Set up shortcuts for the edit view
     let shortcuts = Shortcuts::new(vec![
@@ -34,15 +32,13 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         Shortcut::Pair("Esc", t!("ui_shortcut_cancel").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
     
-    // Determine the title based on mode (create, edit, or import)
-    let title = if is_import {
-        t!("ui_edit_title_import")
-    } else if edit_state.is_create_mode {
-        t!("ui_edit_title_create")
-    } else {
-        t!("ui_edit_title_edit")
+    // Derive title from the edit type
+    let title = match edit_state.edit_type {
+        EditType::Create => t!("ui_edit_title_create"),
+        EditType::Import => t!("ui_edit_title_import"),
+        EditType::Edit => t!("ui_edit_title_edit"),
     };
     
     // Create the main block for the edit form
@@ -57,9 +53,6 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     // Apply the block to the area and get the inner area for the form
     frame.render_widget(edit_block, area);
 
-    // Store the edit form area in the model for click detection
-    model.edit_form_area = Some(area);
-
     // Clear previous field areas
     edit_state.field_areas.clear();
 
@@ -68,7 +61,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         .appearance
         .default_block
         .clone()
-        .title(title.as_ref())
+        .title(format!(" {} ", title.as_ref()))
         .title_alignment(Alignment::Center)
         .title_bottom(shortcuts.as_line())
         .padding(Padding::new(1, 1, 0, 0));

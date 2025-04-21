@@ -35,11 +35,14 @@ This file defines the plugin metadata and executable information:
 name = "example-plugin"
 version = "1.0.0"
 description = "A plugin to fetch time entries from an example service"
+icon = "🔧" # Optional emoji icon to display in the time entry table
 
 [executable]
 default = "plugin-executable"      # For Linux/macOS
 windows = "plugin-executable.exe"  # For Windows (optional)
 ```
+
+> **Note:** The plugin name in the manifest can be any string (e.g., "Hello?" or "my-company/gitlab-plugin") and doesn't need to match the directory name. MOT will use this name to identify the plugin internally and for displaying icons.
 
 ### config.toml
 
@@ -213,9 +216,11 @@ Time entries should be formatted as follows:
 | started_at | string | Start time (RFC3339 format) |
 | ended_at | string | End time (RFC3339 format) |
 | tags | array of strings | Tags associated with the entry |
-| source | string | Source system name |
+| source | string | Display name for the source system |
 | source_url | string (optional) | URL to the entry in the source system |
 | billable | boolean | Whether the time entry is billable |
+
+> **Note:** The `plugin_name` field will be automatically populated by MOT with the plugin's manifest name - you don't need to include this field in your returned time entries.
 
 ## Example Plugin
 

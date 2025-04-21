@@ -57,7 +57,7 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
         Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     // Create a block for the plugins view
     let block = model

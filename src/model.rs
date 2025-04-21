@@ -222,11 +222,20 @@ pub(crate) struct TimeEntryForTable {
     pub plugin_name: Option<String>, // Matched plugin name for consistency
 }
 
+/// Type of edit operation
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub enum EditType {
+    #[default]
+    Edit,
+    Create,
+    Import,
+}
+
 /// State for editing a time entry
 #[derive(Debug, Default, Clone)]
 pub struct EditState {
     pub active: bool,
-    pub is_create_mode: bool,
+    pub edit_type: EditType,
     pub selected_field: EditField,
     pub description: String,
     pub contact_id: Option<String>,
@@ -238,8 +247,11 @@ pub struct EditState {
     pub start_date: String,   // YYYY-MM-DD format
     pub end_date: String,     // YYYY-MM-DD format
     pub time_entry_id: Option<String>, // Only set when editing existing
-    pub editor: TextArea<'static>,       // Active text input
-    pub field_x_offset: usize,            // Text offset in editor
+    pub editor: TextArea<'static>,     // Active text input
+    pub field_x_offset: usize,         // Text offset in editor
+    
+    // For import operation
+    pub original_entry: Option<TimeEntryForTable>,
 
     // Autocomplete state for project selection
     pub(crate) project_autocomplete: AutocompleteState<Project>,
@@ -249,14 +261,6 @@ pub struct EditState {
 
     // Areas of each field for click detection
     pub(crate) field_areas: std::collections::HashMap<EditField, Rect>,
-}
-
-/// State for importing a time entry from a plugin into Moneybird
-#[derive(Debug, Default, Clone)]
-pub struct ImportState {
-    pub active: bool,
-    pub original_entry: Option<TimeEntryForTable>,
-    pub edit_state: EditState,
 }
 
 impl EditState {
@@ -372,6 +376,16 @@ impl EditState {
             user_id: None,
         }
     }
+    
+    /// Check if this is in import mode
+    pub fn is_import_mode(&self) -> bool {
+        self.edit_type == EditType::Import
+    }
+    
+    /// Check if this is in create mode
+    pub fn is_create_mode(&self) -> bool {
+        self.edit_type == EditType::Create
+    }
 }
 
 impl From<EditState> for crate::moneybird::types::TimeEntry {
@@ -431,8 +445,6 @@ pub(crate) struct AppModel {
     pub plugin_manager: Option<crate::plugin::PluginManager>,
     pub plugin_entries: Vec<TimeEntryForTable>,
     pub plugin_view_state: PluginViewState,
-    // Import state (for importing plugin entries to Moneybird)
-    pub import_state: ImportState,
     pub plugin_list_area: Option<Rect>,
 }
 
@@ -466,7 +478,6 @@ impl Default for AppModel {
             plugin_manager: None,
             plugin_entries: Vec::new(),
             plugin_view_state: PluginViewState::default(),
-            import_state: ImportState::default(),
             plugin_list_area: None,
         }
     }

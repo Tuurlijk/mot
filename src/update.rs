@@ -9,13 +9,12 @@ use crate::{
     config, datetime,
     event::Message,
     file,
-    model::{AppModel, AutocompleteState, EditState, ImportState, TimeEntryForTable},
+    model::{AppModel, AutocompleteState, EditField, EditState, EditType, TimeEntryForTable},
+    moneybird::types::{Contact, Project, TimeEntry, User},
+    plugin::{PluginManager, PluginTimeEntry},
     ui::{self},
     RunningState,
 };
-
-// Import the EditField enum
-use crate::model::EditField;
 
 // --- Helper Functions for Selection Logic ---
 
@@ -161,13 +160,8 @@ fn handle_autocomplete_clear<T: Clone>(
 
 // Helper function to handle selecting a project from autocomplete
 fn handle_autocomplete_select_project(model: &mut AppModel) {
-    // Determine which edit state to modify
-    let is_import = model.import_state.active;
-    let edit_state = if is_import {
-        &mut model.import_state.edit_state
-    } else {
-        &mut model.edit_state
-    };
+    // Get a reference to the edit state
+    let edit_state = &mut model.edit_state;
 
     if let Some(selected_project) = edit_state.project_autocomplete.selected_item() {
         // Add selected project to the main project list if it's not already there
@@ -178,7 +172,7 @@ fn handle_autocomplete_select_project(model: &mut AppModel) {
         let project_id = selected_project.id.clone();
         let project_name = selected_project.name.clone().unwrap_or_default();
 
-        // Update the correct edit state
+        // Update the edit state
         edit_state.project_id = project_id;
         edit_state.project_name = project_name.clone(); // Update display name too
         let autocomplete_state = &mut edit_state.project_autocomplete;
@@ -192,13 +186,8 @@ fn handle_autocomplete_select_project(model: &mut AppModel) {
 
 // Helper function to handle selecting a contact from autocomplete
 fn handle_autocomplete_select_contact(model: &mut AppModel) {
-    // Determine which edit state to modify
-    let is_import = model.import_state.active;
-    let edit_state = if is_import {
-        &mut model.import_state.edit_state
-    } else {
-        &mut model.edit_state
-    };
+    // Get a reference to the edit state
+    let edit_state = &mut model.edit_state;
 
     if let Some(selected_contact) = edit_state.contact_autocomplete.selected_item() {
         // Add selected contact to the main contact list if it's not already there
@@ -209,7 +198,7 @@ fn handle_autocomplete_select_contact(model: &mut AppModel) {
         let contact_id = selected_contact.id.clone();
         let contact_name = selected_contact.company_name.clone().unwrap_or_default();
 
-        // Update the correct edit state
+        // Update the edit state
         edit_state.contact_id = contact_id;
         edit_state.contact_name = contact_name.clone(); // Update display name too
         let autocomplete_state = &mut edit_state.contact_autocomplete;
@@ -223,188 +212,82 @@ fn handle_autocomplete_select_contact(model: &mut AppModel) {
 
 // Helper function to refresh project autocomplete suggestions (local filter)
 async fn handle_autocomplete_refresh_project(model: &mut AppModel) -> Option<Message> {
-    // Determine which edit state to use
-    let is_import = model.import_state.active;
-    let (query, min_chars) = {
-        let edit_state = if is_import {
-            &mut model.import_state.edit_state
-        } else {
-            &mut model.edit_state
-        };
-        (
-            edit_state.project_autocomplete.input.clone(),
-            edit_state.project_autocomplete.min_chars_to_search,
-        )
-    }; // edit_state borrow ends here
+    // Get the query and min chars once to avoid multiple borrows
+    let query = model.edit_state.project_autocomplete.input.clone();
+    let min_chars = model.edit_state.project_autocomplete.min_chars_to_search;
 
-    if query.is_empty() || query.len() < min_chars {
-        // Re-borrow edit_state mutably for update
-        let edit_state = if is_import {
-            &mut model.import_state.edit_state
-        } else {
-            &mut model.edit_state
-        };
-        edit_state.project_autocomplete.update_items(vec![]);
-        // Borrow model immutably for logging after mutable borrow is released
-        model.log_debug(format!(
-            "Query '{}' too short or empty, cleared project items.",
-            query
-        ));
-    } else {
-        // Mark searched in a separate mutable borrow scope
-        {
-            let edit_state = if is_import {
-                &mut model.import_state.edit_state
-            } else {
-                &mut model.edit_state
-            };
-            edit_state.project_autocomplete.mark_searched();
-        } // edit_state borrow ends here
-
-        // Borrow model immutably for logging
-        model.log_debug(t!("update_filtering_local_projects", query = query));
-
-        // Use the main model.projects list for filtering (immutable borrow)
-        let filtered_projects: Vec<_> = model
-            .projects
-            .iter()
-            .filter(|p| {
-                if let Some(name) = &p.name {
-                    name.to_lowercase().contains(&query.to_lowercase())
-                } else {
-                    false
-                }
-            })
-            .cloned()
-            .collect();
-
-        let items_count = filtered_projects.len();
-
-        // Update items in a separate mutable borrow scope
-        {
-            let edit_state = if is_import {
-                &mut model.import_state.edit_state
-            } else {
-                &mut model.edit_state
-            };
-            edit_state
-                .project_autocomplete
-                .update_items(filtered_projects);
-        } // edit_state borrow ends here
-
-        // Log after the mutable borrow is released
-        model.log_debug(format!(
-            "Local filter found {} projects.",
-            items_count // Use the stored count
-        ));
+    // If the query is not long enough, don't search
+    if query.len() < min_chars {
+        // Update with empty results
+        model.edit_state.project_autocomplete.update_items(vec![]);
+        return None;
     }
+
+    // Mark state as loading, set searched flag
+    model.edit_state.project_autocomplete.mark_searched();
+
+    // Create a filtered list of projects
+    let filtered_projects = model
+        .projects
+        .iter()
+        .filter(|project| {
+            if let Some(name) = &project.name {
+                name.to_lowercase().contains(&query.to_lowercase())
+            } else {
+                false
+            }
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    // Update project autocomplete with filtered projects
+    model
+        .edit_state
+        .project_autocomplete
+        .update_items(filtered_projects);
+
+    // Get the count of items after update
+    let items_count = model.edit_state.project_autocomplete.items.len();
+
+    model.log_debug(format!(
+        "Updated project items: {} results for query '{}'",
+        items_count, query
+    ));
 
     None // Return None as we've already updated the state
 }
 
 // Helper function to refresh contact autocomplete suggestions (API call)
 async fn handle_autocomplete_refresh_contact(model: &mut AppModel) -> Option<Message> {
-    // Determine which edit state to use
-    let is_import = model.import_state.active;
-    let (query, min_chars) = {
-        let edit_state = if is_import {
-            &mut model.import_state.edit_state
-        } else {
-            &mut model.edit_state
-        };
-        (
-            edit_state.contact_autocomplete.input.clone(),
-            edit_state.contact_autocomplete.min_chars_to_search,
-        )
-    }; // edit_state borrow ends here
+    // Get the query and min chars once to avoid multiple borrows
+    let query = model.edit_state.contact_autocomplete.input.clone();
+    let min_chars = model.edit_state.contact_autocomplete.min_chars_to_search;
 
-    if query.is_empty() || query.len() < min_chars {
-        // Re-borrow edit_state mutably for update
-        {
-            let edit_state = if is_import {
-                &mut model.import_state.edit_state
-            } else {
-                &mut model.edit_state
-            };
-            edit_state.contact_autocomplete.update_items(vec![]);
-        } // edit_state borrow ends here
+    // If the query is not long enough, don't search
+    if query.len() < min_chars {
+        // Update with empty results
+        model.edit_state.contact_autocomplete.update_items(vec![]);
+        return None;
+    }
 
-        // Borrow model immutably for logging after mutable borrow is released
-        model.log_debug(format!(
-            "Query '{}' too short or empty, cleared contact items.",
-            query
-        ));
-    } else {
-        // Set loading and mark searched in a separate mutable borrow scope
-        {
-            let edit_state = if is_import {
-                &mut model.import_state.edit_state
-            } else {
-                &mut model.edit_state
-            };
-            edit_state.contact_autocomplete.is_loading = true;
-            edit_state.contact_autocomplete.mark_searched();
-        } // edit_state borrow ends here
+    // Log before making API call
+    model.log_debug(format!("Searching contacts with query: '{}'", query));
 
-        // Log before API call (immutable borrow)
-        model.log_debug(format!(
-            "Calling API to search contacts for query: '{}'",
-            query
-        ));
+    // Get admin ID properly
+    let admin_id = model.administration.id.clone().unwrap_or_default();
+    // Make the API call
+    let contacts_result = get_contacts_by_query(&model.client, &admin_id, &query).await;
 
-        // API call parameters remain the same (immutable borrows of model parts)
-        let client = model.client.clone();
-        let admin_id = model.administration.id.clone().unwrap_or_default();
-
-        // Perform the API call
-        let api_result = get_contacts_by_query(&client, &admin_id, &query).await;
-
-        // Process result and update state in a new mutable borrow scope
-        let mut items_count = 0;
-        match api_result {
-            Ok(contacts) => {
-                items_count = contacts.len();
-                // Update the correct edit state
-                {
-                    let edit_state = if is_import {
-                        &mut model.import_state.edit_state
-                    } else {
-                        &mut model.edit_state
-                    };
-                    edit_state.contact_autocomplete.update_items(contacts);
-                } // edit_state borrow ends here
-
-                // Log success (immutable borrow)
-                model.log_debug(format!(
-                    "API search succeeded. Found {} contacts.",
-                    items_count
-                ));
-            }
-            Err(err) => {
-                let error_msg =
-                    t!("update_api_search_contacts_failed", error = err.to_string()).to_string();
-                // Show error uses immutable borrow temporarily
-                ui::show_error(model, error_msg.clone());
-                // Update the correct edit state
-                {
-                    let edit_state = if is_import {
-                        &mut model.import_state.edit_state
-                    } else {
-                        &mut model.edit_state
-                    };
-                    edit_state.contact_autocomplete.update_items(vec![]);
-                } // edit_state borrow ends here
-            }
+    match contacts_result {
+        Ok(contacts) => {
+            let count = contacts.len();
+            model.log_debug(format!("Contact search returned {} results", count));
+            model.edit_state.contact_autocomplete.update_items(contacts);
         }
-        // Update loading state in a final mutable borrow scope
-        {
-            let edit_state = if is_import {
-                &mut model.import_state.edit_state
-            } else {
-                &mut model.edit_state
-            };
-            edit_state.contact_autocomplete.is_loading = false;
-        } // edit_state borrow ends here
+        Err(err) => {
+            model.log_error(format!("Contact search failed: {}", err));
+            model.edit_state.contact_autocomplete.update_items(vec![]);
+        }
     }
 
     None // Return None as we've already updated the state
@@ -499,147 +382,69 @@ fn handle_modal_close(
 
 /// Initialize an import from a plugin time entry to Moneybird
 fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
-    // Make sure we have a selected entry
-    if model.time_entries_for_table.is_empty() || model.time_entry_table_state.selected().is_none()
-    {
+    // Check if there is a selected entry in the plugin view
+    let selected_entry = if let Some(selected_index) = model.plugin_view_state.selected_index {
+        if selected_index < model.plugin_entries.len() {
+            model.plugin_entries[selected_index].clone()
+        } else {
+            return None;
+        }
+    } else {
         return None;
-    }
+    };
 
-    let selected_idx = model.time_entry_table_state.selected().unwrap();
-    // Clone the entry to avoid borrowing conflicts
-    let selected_entry = model.time_entries_for_table[selected_idx].clone();
+    // Store the original entry for reference
+    model.edit_state.original_entry = Some(selected_entry.clone());
 
-    // Only allow importing of plugin entries (not Moneybird entries)
-    if selected_entry.source.to_lowercase() == "moneybird" {
-        model.log_notice(t!("update_cant_import_moneybird_entry"));
-        return None;
-    }
-
-    // Log that we're importing the entry
-    model.log_notice(t!(
-        "update_importing_time_entry",
-        description = selected_entry.description.clone(),
-        source = selected_entry.source.clone()
-    ));
-
-    // Store the original entry in the import state
-    model.import_state.original_entry = Some(selected_entry.clone());
-
-    // Initialize edit state for the import
+    // Initialize edit state with data from the selected entry
     let mut edit_state = EditState::default();
-    edit_state.active = true;
-    edit_state.is_create_mode = true; // Import is technically creating a new entry in MB
-    edit_state.description = selected_entry.description.clone();
-    // Initialize names here, might be overwritten if match found
-    edit_state.project_name = selected_entry.project.clone();
-    edit_state.contact_name = selected_entry.customer.clone();
-    edit_state.time_entry_id = None; // Always creating a new entry on import
 
-    // Parse and set date/time fields from the original entry
+    // Set fields from the plugin entry
+    edit_state.description = selected_entry.description.clone();
+
+    // Parse start_date and start_time from started_at
     let admin_timezone = model
         .administration
         .time_zone
         .clone()
         .unwrap_or_else(|| "UTC".to_string());
-
     if let (Some(start_date), Some(start_time)) =
-        datetime::parse_datetime_for_edit(&selected_entry.started_at, &admin_timezone)
+        crate::datetime::parse_datetime_for_edit(&selected_entry.started_at, &admin_timezone)
     {
         edit_state.start_date = start_date;
         edit_state.start_time = start_time;
     }
 
+    // Parse end_date and end_time from ended_at
     if let (Some(end_date), Some(end_time)) =
-        datetime::parse_datetime_for_edit(&selected_entry.ended_at, &admin_timezone)
+        crate::datetime::parse_datetime_for_edit(&selected_entry.ended_at, &admin_timezone)
     {
         edit_state.end_date = end_date;
         edit_state.end_time = end_time;
     }
 
-    // Set up editor with the description text
-    edit_state.editor = TextArea::new(vec![edit_state.description.clone()]);
-    edit_state.selected_field = EditField::Description;
+    // Set contact and project from TimeEntryForTable
+    edit_state.contact_name = selected_entry.customer.clone();
+    edit_state.project_name = selected_entry.project.clone();
 
-    // Try to match the contact with Moneybird entities
-    if !model.contacts.is_empty() {
-        let contact_name_lower = selected_entry.customer.to_lowercase();
-        for contact in &model.contacts {
-            let name = crate::ui::format_contact_name(contact).to_lowercase();
-            if name == contact_name_lower
-                || name.contains(&contact_name_lower)
-                || contact_name_lower.contains(&name)
-            {
-                let matched_name = crate::ui::format_contact_name(contact);
-                edit_state.contact_id = contact.id.clone();
-                edit_state.contact_name = matched_name.clone();
-                // Set autocomplete input and mark as searched
-                edit_state.contact_autocomplete.input = matched_name.clone();
-                edit_state.contact_autocomplete.mark_searched();
-                model.log_notice(format!("Matched contact: {}", edit_state.contact_name));
-                break;
-            }
-        }
-    }
+    edit_state.edit_type = EditType::Import;
+    edit_state.active = true;
+    edit_state.original_entry = Some(selected_entry);
 
-    // Try to match the project with Moneybird entities
-    if !model.projects.is_empty() {
-        let project_name_lower = selected_entry.project.to_lowercase();
-        for project in &model.projects {
-            let name = project.name.clone().unwrap_or_default().to_lowercase();
-            if name == project_name_lower
-                || name.contains(&project_name_lower)
-                || project_name_lower.contains(&name)
-            {
-                let matched_name = project.name.clone().unwrap_or_default();
-                edit_state.project_id = project.id.clone();
-                edit_state.project_name = matched_name.clone();
-                // Set autocomplete input and mark as searched
-                edit_state.project_autocomplete.input = matched_name.clone();
-                edit_state.project_autocomplete.mark_searched();
-                model.log_notice(format!("Matched project: {}", edit_state.project_name));
-                break;
-            }
-        }
-    }
+    // Set the model's edit state
+    model.edit_state = edit_state;
 
-    // Show notifications for unmatched entities (after attempting matches)
-    if edit_state.contact_id.is_none() {
-        ui::show_error(
-            model,
-            t!(
-                "update_no_contact_match",
-                contact_name = selected_entry.customer.clone()
-            ),
-        );
-    }
-
-    if edit_state.project_id.is_none() {
-        ui::show_error(
-            model,
-            t!(
-                "update_no_project_match",
-                project_name = selected_entry.project.clone()
-            ),
-        );
-    }
-
-    // Set the edit state in the import state
-    model.import_state.edit_state = edit_state;
-    model.import_state.active = true;
-
-    None
+    Some(Message::None)
 }
 
 /// Check if the model's import state is active
 fn is_import_active(model: &AppModel) -> bool {
-    model.import_state.active
+    model.edit_state.active && model.edit_state.is_import_mode()
 }
 
 // --- Helper function to get the active mutable EditState ---
 fn get_active_edit_state_mut(model: &mut AppModel) -> Option<&mut EditState> {
-    if model.import_state.active {
-        Some(&mut model.import_state.edit_state)
-    } else if model.edit_state.active {
+    if model.edit_state.active {
         Some(&mut model.edit_state)
     } else {
         None
@@ -739,12 +544,12 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         }
         Message::TimeEntryCreate => {
             model.log_notice(t!("update_log_initiating_create").to_string());
-            model.edit_state = EditState::default();
-            model.edit_state.active = true;
-            model.edit_state.time_entry_id = None;
-            model.edit_state.is_create_mode = true;
-            model.edit_state.editor = TextArea::default();
-            model.edit_state.selected_field = crate::model::EditField::Description;
+            let mut edit_state = EditState::default();
+            edit_state.edit_type = EditType::Create;
+            edit_state.active = true;
+            edit_state.time_entry_id = None;
+            edit_state.editor = TextArea::default();
+            edit_state.selected_field = crate::model::EditField::Description;
             let admin_timezone_str = model
                 .administration
                 .time_zone
@@ -754,12 +559,13 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 .parse::<chrono_tz::Tz>()
                 .unwrap_or(chrono_tz::UTC);
             let now = chrono::Utc::now().with_timezone(&admin_tz);
-            model.edit_state.start_date = now.format("%Y-%m-%d").to_string();
-            model.edit_state.start_time = now.format("%H:%M").to_string();
+            edit_state.start_date = now.format("%Y-%m-%d").to_string();
+            edit_state.start_time = now.format("%H:%M").to_string();
             let end_time_default = now + chrono::Duration::hours(1);
-            model.edit_state.end_date = end_time_default.format("%Y-%m-%d").to_string();
-            model.edit_state.end_time = end_time_default.format("%H:%M").to_string();
-            initialize_editor_or_autocomplete(&mut model.edit_state);
+            edit_state.end_date = end_time_default.format("%Y-%m-%d").to_string();
+            edit_state.end_time = end_time_default.format("%H:%M").to_string();
+            initialize_editor_or_autocomplete(&mut edit_state);
+            model.edit_state = edit_state;
             None
         }
         Message::TimeEntryExport => {
@@ -887,14 +693,17 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         }
 
         Message::EditTimeEntryCancel => {
-            if model.edit_state.active {
-                model.edit_state.active = false;
-                model.log_notice(t!("canceled_editing").to_string());
+            let was_import = model.edit_state.is_import_mode();
+            model.edit_state = EditState::default();
+
+            if was_import {
+                Some(Message::PluginViewActivate)
+            } else {
+                Some(Message::None)
             }
-            None
         }
         Message::EditSave => {
-            let was_import = model.import_state.active;
+            let was_import = model.edit_state.is_import_mode();
             let mut next_message: Option<Message> = None;
 
             // Get timezone string outside the mutable borrow scope
@@ -925,7 +734,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                         let data = edit_state.try_into_time_entry(&admin_timezone_str); // Use pre-fetched timezone
                         prepared_data = Some((
                             data,
-                            edit_state.is_create_mode,
+                            edit_state.edit_type == EditType::Create,
                             edit_state.time_entry_id.clone(),
                             edit_state.description.clone(),
                         ));
@@ -1032,8 +841,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 // --- Reset State (only on success) ---
                 if next_message.is_some() {
                     if was_import {
-                        model.import_state = ImportState::default();
-                    } else {
                         model.edit_state = EditState::default();
                     }
                 }
@@ -1041,30 +848,20 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             next_message
         }
 
-        // --- Add the EditCancel arm here ---
         Message::EditCancel => {
-            let was_import = model.import_state.active;
-            let mut state_reset = false;
-            if let Some(edit_state) = get_active_edit_state_mut(model) {
-                edit_state.active = false;
-                state_reset = true;
+            let was_import = model.edit_state.is_import_mode();
+            model.edit_state = EditState::default();
+
+            if was_import {
+                Some(Message::PluginViewActivate)
+            } else {
+                Some(Message::None)
             }
-            if state_reset {
-                if was_import {
-                    model.import_state = ImportState::default();
-                    model.log_notice(t!("canceled_import").to_string());
-                } else {
-                    model.log_notice(t!("canceled_editing").to_string());
-                    model.edit_state = EditState::default();
-                }
-            }
-            None
         }
-        // --- End EditCancel arm ---
         Message::EditTimeEntryNextField => {
             // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.import_state.active {
-                &mut model.import_state.edit_state
+            let edit_state = if model.edit_state.is_import_mode() {
+                &mut model.edit_state
             } else if model.edit_state.active {
                 &mut model.edit_state
             } else {
@@ -1176,18 +973,17 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
         Message::AutocompleteSelect => {
-            if model.import_state.active || model.edit_state.active {
-                // Check if any edit state is active
-                // Helpers now check internal state, just call them based on field
+            if model.edit_state.active {
+                // Check if regular edit is active
                 if let Some(edit_state) = get_active_edit_state_mut(model) {
                     // Get read-only state to check field
                     match edit_state.selected_field {
                         crate::model::EditField::Project => {
                             handle_autocomplete_select_project(model)
-                        } // Pass mutable model
+                        }
                         crate::model::EditField::Contact => {
                             handle_autocomplete_select_contact(model)
-                        } // Pass mutable model
+                        }
                         _ => {}
                     }
                 }
@@ -1195,8 +991,8 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             None
         }
         Message::AutocompleteRefresh => {
-            if model.import_state.active || model.edit_state.active {
-                // Check if any edit state is active
+            if model.edit_state.active {
+                // Check if regular edit is active
                 if let Some(edit_state) = get_active_edit_state_mut(model) {
                     // Get read-only state to check field
                     match edit_state.selected_field {
@@ -1502,6 +1298,12 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             } else {
                 model.log_debug(t!("update_log_panel_closed").to_string());
             }
+            None
+        }
+
+        Message::None => None,
+        Message::PluginViewActivate => {
+            model.plugin_view_state.active = true;
             None
         }
     }

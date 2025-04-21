@@ -34,6 +34,9 @@ pub enum Message {
     ExecuteDeleteTimeEntry(String),
     ExecuteExport,
 
+    None, // Placeholder for no action needed
+
+    PluginViewActivate, // Activate the plugin view
     PluginViewShow,
     PluginViewHide,
     PluginViewSelectNext,
@@ -242,14 +245,10 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
     }
 
     // --- Refactored Edit State Key Handling (Regular Edit or Import Edit) ---
-    if model.edit_state.active || model.import_state.active {
-        // Determine which edit state to use (regular or import)
-        let is_import = model.import_state.active;
-        let edit_state = if is_import {
-            &model.import_state.edit_state
-        } else {
-            &model.edit_state
-        };
+    if model.edit_state.active {
+        // Check if we're in import mode
+        let is_import = model.edit_state.is_import_mode();
+        let edit_state = &model.edit_state;
 
         match key.code {
             // --- Global Edit Keys ---
@@ -390,18 +389,14 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
     }
 
     // Handle clicks in edit mode
-    if (model.edit_state.active || model.import_state.active) && mouse.kind == MouseEventKind::Down(event::MouseButton::Left) {
+    if model.edit_state.active && mouse.kind == MouseEventKind::Down(event::MouseButton::Left) {
         let mouse_pos = ratatui::layout::Position {
             x: mouse.column,
             y: mouse.row,
         };
 
-        // Get the field areas from the appropriate edit state
-        let field_areas = if model.import_state.active {
-            &model.import_state.edit_state.field_areas
-        } else {
-            &model.edit_state.field_areas
-        };
+        // Get the field areas from the edit state
+        let field_areas = &model.edit_state.field_areas;
 
         // Check if click is on any of the stored field areas
         for (&field, &area) in field_areas {

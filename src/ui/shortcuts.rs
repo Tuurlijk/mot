@@ -38,7 +38,7 @@ impl Shortcuts {
                 })
                 .collect(),
             separator: " | ".to_string(),
-            shortcut_label_style: Style::default(),
+            shortcut_label_style: Style::default().add_modifier(Modifier::BOLD),
             shortcut_key_style: Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),

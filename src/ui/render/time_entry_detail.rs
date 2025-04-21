@@ -38,7 +38,7 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     let collapsed_top_border_set = symbols::border::Set {
         top_left: symbols::line::NORMAL.vertical_right,

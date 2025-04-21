@@ -71,15 +71,23 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
     // Get relative week description
     let week_relative = datetime::get_title_week_description(model.week_offset);
 
-    // Calculate total time
-    let total_time = model
+    // Calculate total time - keep everything in u64 to prevent overflow
+    let total_minutes = model
         .time_entries_for_table
         .iter()
-        .fold(0, |acc, time_entry| {
+        .fold(0_u64, |acc, time_entry| {
             let (hours, minutes) =
                 datetime::calculate_duration(&time_entry.started_at, &time_entry.ended_at);
             acc + (hours * 60 + minutes)
         });
+
+    // Convert to hours and minutes for display
+    let total_hours = total_minutes / 60;
+    let total_minutes = total_minutes % 60;
+
+    let total_time_style = Style::default().bold().yellow();
+    let total_time_str =
+        datetime::format_duration(total_hours, total_minutes, total_time_style);
 
     let title_week_prefix = t!("ui_table_title_week");
     let title_separator = t!("ui_table_title_separator");
@@ -93,9 +101,6 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
         Span::from(title_separator.to_string()),
     ];
 
-    let total_time_style = Style::default().bold().yellow();
-    let total_time_str =
-        datetime::format_duration(total_time / 60, total_time % 60, total_time_style);
     title_spans.extend(total_time_str);
     title_spans.push(Span::from(" "));
 
