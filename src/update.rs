@@ -1,6 +1,8 @@
 use crossterm::event::KeyCode;
 use ratatui::style::Style;
 use rust_i18n::t;
+use std::fs;
+use toml::Value;
 use tui_textarea::TextArea;
 
 use crate::{
@@ -381,17 +383,24 @@ fn handle_modal_close(
 }
 
 /// Initialize an import from a plugin time entry to Moneybird
-fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
-    // Check if there is a selected entry in the plugin view
-    let selected_entry = if let Some(selected_index) = model.plugin_view_state.selected_index {
-        if selected_index < model.plugin_entries.len() {
-            model.plugin_entries[selected_index].clone()
+async fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
+    // Get the currently selected entry from the time entries table
+    let selected_entry = if let Some(selected_index) = model.time_entry_table_state.selected() {
+        if selected_index < model.time_entries_for_table.len() {
+            model.time_entries_for_table[selected_index].clone()
         } else {
             return None;
         }
     } else {
         return None;
     };
+
+    // Check if this is a plugin entry (not from Moneybird)
+    if selected_entry.plugin_name.is_none() && selected_entry.source == "moneybird" {
+        // This is a Moneybird entry, can't import it
+        ui::show_error(model, t!("update_cant_import_moneybird_entry"));
+        return None;
+    }
 
     // Store the original entry for reference
     model.edit_state.original_entry = Some(selected_entry.clone());
@@ -423,13 +432,146 @@ fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
         edit_state.end_time = end_time;
     }
 
-    // Set contact and project from TimeEntryForTable
-    edit_state.contact_name = selected_entry.customer.clone();
-    edit_state.project_name = selected_entry.project.clone();
+    // --- Match Contact ---
+    let contact_name_from_plugin = selected_entry.customer.clone();
+    model.log_debug(format!(
+        "Contact name from plugin: {}",
+        contact_name_from_plugin
+    ));
+    let mut matched_contact: Option<Contact> = None;
+    if !contact_name_from_plugin.is_empty() {
+        // 1. Check local cache first
+        for contact in &model.contacts {
+            if let Some(company_name) = &contact.company_name {
+                if company_name.to_lowercase() == contact_name_from_plugin.to_lowercase() {
+                    matched_contact = Some(contact.clone());
+                    model.log_notice(t!(
+                        "update_matched_contact_local",
+                        contact_name = company_name.clone()
+                    ));
+                    break;
+                }
+            }
+        }
+
+        // 2. If no local match, try API lookup
+        if matched_contact.is_none() {
+            model.log_debug(format!(
+                "No local contact match for '{}', querying API...",
+                contact_name_from_plugin
+            ));
+            let admin_id = model.administration.id.clone().unwrap_or_default();
+            // Use a cloned client for the async call to avoid borrow issues
+            let client = model.client.clone();
+            match api::get_contacts_by_query(&client, &admin_id, &contact_name_from_plugin).await {
+                Ok(mut api_contacts) => {
+                    if api_contacts.len() == 1 {
+                        // Exact match found via API
+                        let api_contact = api_contacts.remove(0);
+                        matched_contact = Some(api_contact.clone());
+                        model.log_notice(t!(
+                            "update_matched_contact_api",
+                            contact_name = api_contact.company_name.unwrap_or_default()
+                        ));
+                        // Optionally add to local cache?
+                        // model.contacts.push(api_contact);
+                    } else if api_contacts.is_empty() {
+                        model.log_notice(t!(
+                            "update_no_contact_match_api",
+                            contact_name = contact_name_from_plugin.clone()
+                        ));
+                    } else {
+                        model.log_notice(t!(
+                            "update_multiple_contact_match_api",
+                            count = api_contacts.len(),
+                            contact_name = contact_name_from_plugin.clone()
+                        ));
+                    }
+                }
+                Err(e) => {
+                    model.log_error(format!(
+                        "API error querying contact '{}': {}",
+                        contact_name_from_plugin, e
+                    ));
+                }
+            }
+        }
+    }
+
+    if matched_contact.is_none() && !contact_name_from_plugin.is_empty() {
+        // Log final no-match only if API lookup also failed or wasn't applicable
+        if model.contacts.iter().all(|c| {
+            c.company_name.as_deref().unwrap_or_default().to_lowercase()
+                != contact_name_from_plugin.to_lowercase()
+        }) {
+            model.log_notice(t!(
+                "update_no_contact_match",
+                contact_name = contact_name_from_plugin.clone()
+            ));
+        }
+    }
+
+    // --- Match Project ---
+    let project_name_from_plugin = selected_entry.project.clone();
+    let mut matched_project: Option<Project> = None;
+    if !project_name_from_plugin.is_empty() {
+        for project in &model.projects {
+            if let Some(name) = &project.name {
+                if name.to_lowercase() == project_name_from_plugin.to_lowercase() {
+                    matched_project = Some(project.clone());
+                    model.log_notice(t!("update_matched_project", project_name = name.clone()));
+                    break;
+                }
+            }
+        }
+    }
+
+    if matched_project.is_none() && !project_name_from_plugin.is_empty() {
+        model.log_notice(t!(
+            "update_no_project_match",
+            project_name = project_name_from_plugin.clone()
+        ));
+    }
+
+    // Set EditState fields based on matching results
+    if let Some(contact) = matched_contact {
+        edit_state.contact_id = contact.id;
+        edit_state.contact_name = contact.company_name.unwrap_or_default();
+    } else {
+        edit_state.contact_id = None;
+        edit_state.contact_name = contact_name_from_plugin; // Show the original name if no match
+    }
+
+    if let Some(project) = matched_project {
+        edit_state.project_id = project.id;
+        edit_state.project_name = project.name.unwrap_or_default();
+    } else {
+        edit_state.project_id = None;
+        edit_state.project_name = project_name_from_plugin; // Show the original name if no match
+    }
+
+    // Log the import action
+    model.log_notice(t!(
+        "update_importing_time_entry",
+        description = selected_entry.description.clone(),
+        source = selected_entry.source.clone()
+    ));
 
     edit_state.edit_type = EditType::Import;
     edit_state.active = true;
     edit_state.original_entry = Some(selected_entry);
+
+    // Set the default field to Description
+    edit_state.selected_field = crate::model::EditField::Description;
+
+    // Initialize the editor component with the description
+    edit_state.editor = TextArea::default();
+    edit_state.editor.insert_str(&edit_state.description);
+
+    // Make sure project and contact autocomplete fields are properly set up
+    // Always initialize the input with the name we decided to display
+    edit_state.project_autocomplete.input = edit_state.project_name.clone();
+    edit_state.contact_autocomplete.input = edit_state.contact_name.clone();
 
     // Set the model's edit state
     model.edit_state = edit_state;
@@ -602,14 +744,6 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                         None,
                     );
                 }
-            }
-            None
-        }
-
-        Message::TimeEntrySearchKeyPress(key) => {
-            if model.search_state.active {
-                model.search_state.text_input.input(key);
-                model.filter_items();
             }
             None
         }
@@ -1181,7 +1315,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         // --- Import Handling ---
         Message::ImportTimeEntry => {
             if !model.edit_state.active && !is_import_active(model) {
-                initialize_time_entry_import(model)
+                initialize_time_entry_import(model).await
             } else {
                 None
             }
@@ -1306,28 +1440,31 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             model.plugin_view_state.active = true;
             None
         }
-        
+
         Message::DebugPluginResponse(plugin_name) => {
             model.log_notice(t!("debugging_plugin", name = plugin_name.clone()));
-            
+
             // Get the current date and a date 24 hours later for testing
             let now = chrono::Utc::now();
             let tomorrow = now + chrono::Duration::hours(24);
-            
+
             if let Some(plugin_manager) = &mut model.plugin_manager {
-                match plugin_manager.debug_plugin_response(&plugin_name, &now, &tomorrow).await {
+                match plugin_manager
+                    .debug_plugin_response(&plugin_name, &now, &tomorrow)
+                    .await
+                {
                     Ok(result_json) => {
                         // Create a diagnostic message to show the developer
                         let diagnostic_modal_id = "plugin_debug_response";
                         let diagnostic_title = t!("plugin_debug_result", name = plugin_name);
-                        
+
                         // Create a formatted version of the response with line numbers
                         let formatted_response = if result_json.trim().is_empty() {
                             t!("plugin_returned_empty_response").to_string()
                         } else {
                             // Add helpful diagnostic info for common issues
                             let mut diagnostic_info = String::new();
-                            
+
                             // The debug_plugin_response method only returns the result field,
                             // so we're analyzing the time entries array, not the JSON-RPC envelope
                             if result_json.trim().starts_with("[") {
@@ -1335,16 +1472,16 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                 match serde_json::from_str::<Vec<PluginTimeEntry>>(&result_json) {
                                     Ok(entries) => {
                                         diagnostic_info.push_str(&t!(
-                                            "plugin_debug_valid_entries", 
+                                            "plugin_debug_valid_entries",
                                             count = entries.len().to_string()
                                         ));
                                         diagnostic_info.push_str("\n\n");
-                                        
+
                                         // Check for required fields in entries
                                         if !entries.is_empty() {
                                             for (i, entry) in entries.iter().enumerate() {
                                                 let mut field_issues = Vec::new();
-                                                
+
                                                 if entry.id.is_empty() {
                                                     field_issues.push("id");
                                                 }
@@ -1357,7 +1494,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                                 if entry.ended_at.is_empty() {
                                                     field_issues.push("ended_at");
                                                 }
-                                                
+
                                                 if !field_issues.is_empty() {
                                                     diagnostic_info.push_str(&format!(
                                                         "Entry #{}: Missing required fields: {}\n",
@@ -1367,7 +1504,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                                 }
                                             }
                                         }
-                                    },
+                                    }
                                     Err(e) => {
                                         diagnostic_info.push_str(&t!(
                                             "plugin_error_invalid_time_entries",
@@ -1385,21 +1522,21 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                 diagnostic_info.push_str(&t!("plugin_warning_expected_array"));
                                 diagnostic_info.push_str("\n\n");
                             }
-                            
+
                             // Format with line numbers and add the diagnostic info
                             let mut formatted = String::new();
                             if !diagnostic_info.is_empty() {
                                 formatted.push_str(&diagnostic_info);
                                 formatted.push_str("---\n");
                             }
-                            
+
                             for (i, line) in result_json.lines().enumerate() {
                                 formatted.push_str(&format!("{:03}: {}\n", i + 1, line));
                             }
-                            
+
                             formatted
                         };
-                        
+
                         ui::show_modal(
                             model,
                             crate::ui::ModalData {
@@ -1410,9 +1547,14 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                                 ..Default::default()
                             },
                         );
-                    },
+                    }
                     Err(err) => {
-                        let error_msg = t!("plugin_debug_failed", name = plugin_name, error = err.to_string()).to_string();
+                        let error_msg = t!(
+                            "plugin_debug_failed",
+                            name = plugin_name,
+                            error = err.to_string()
+                        )
+                        .to_string();
                         model.log_error(error_msg.clone());
                         ui::show_error(model, error_msg);
                     }
@@ -1420,8 +1562,161 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             } else {
                 ui::show_error(model, t!("plugin_manager_not_available"));
             }
-            
+
             None
         }
+        Message::PluginToggleActivation => {
+            let selected_index_opt = model.plugin_view_state.selected_index;
+            // Get necessary info before the mutable borrow for logging
+            let plugins_dir_opt = model
+                .plugin_manager
+                .as_ref()
+                .map(|pm| pm.plugins_dir().to_path_buf());
+
+            if let (Some(selected_index), Some(plugins_dir)) = (selected_index_opt, plugins_dir_opt)
+            {
+                // We need plugin_manager again for list_plugins, so re-borrow immutably
+                if let Some(plugin_manager) = model.plugin_manager.as_ref() {
+                    let plugins = plugin_manager.list_plugins();
+                    if selected_index < plugins.len() {
+                        let plugin_info = &plugins[selected_index];
+                        let plugin_name = plugin_info.name.clone();
+
+                        // Now log, borrowing model mutably
+                        model
+                            .log_notice(format!("Toggling activation for plugin: {}", plugin_name));
+
+                        // Find the plugin directory using the pre-fetched plugins_dir
+                        let plugin_dir_result = find_plugin_directory(&plugins_dir, &plugin_name);
+
+                        match plugin_dir_result {
+                            Ok(plugin_dir) => {
+                                let config_path = plugin_dir.join("config.toml");
+                                match toggle_plugin_config_enabled(&config_path) {
+                                    Ok(new_state) => {
+                                        let status_msg = if new_state {
+                                            t!("plugin_toggle_enabled", name = plugin_name)
+                                        } else {
+                                            t!("plugin_toggle_disabled", name = plugin_name)
+                                        };
+                                        model.log_success(status_msg.clone());
+                                        ui::show_info(
+                                            model,
+                                            "plugin_toggle",
+                                            t!("success").to_string(),
+                                            status_msg,
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let error_msg = t!(
+                                            "plugin_toggle_error",
+                                            name = plugin_name,
+                                            error = e.to_string()
+                                        );
+                                        model.log_error(error_msg.clone());
+                                        ui::show_error(model, error_msg);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let error_msg = t!(
+                                    "plugin_toggle_find_dir_error",
+                                    name = plugin_name,
+                                    error = e.to_string()
+                                );
+                                model.log_error(error_msg.clone());
+                                ui::show_error(model, error_msg);
+                            }
+                        }
+                    }
+                }
+            }
+            None // No further message needed
+        }
     }
+}
+
+// --- Helper function to find plugin directory (similar to debug logic) ---
+fn find_plugin_directory(
+    plugins_dir: &std::path::Path,
+    plugin_name: &str,
+) -> Result<std::path::PathBuf, String> {
+    // Search logic remains largely the same, but takes plugins_dir directly
+    if let Ok(entries) = fs::read_dir(plugins_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let manifest_path = path.join("manifest.toml");
+                if manifest_path.exists() {
+                    if let Ok(content) = fs::read_to_string(&manifest_path) {
+                        if let Ok(manifest_value) = content.parse::<Value>() {
+                            if let Some(plugin_table) =
+                                manifest_value.get("plugin").and_then(|p| p.as_table())
+                            {
+                                // Use as_str() instead of as_string()
+                                if let Some(name_val) =
+                                    plugin_table.get("name").and_then(|n| n.as_str())
+                                {
+                                    if name_val == plugin_name {
+                                        return Ok(path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: try direct name match (less reliable)
+    let direct_path = plugins_dir.join(plugin_name);
+    if direct_path.is_dir() {
+        Ok(direct_path)
+    } else {
+        Err(format!(
+            "Could not find directory for plugin '{}'",
+            plugin_name
+        ))
+    }
+}
+
+// --- Helper function to toggle the 'enabled' key in a TOML config file ---
+fn toggle_plugin_config_enabled(config_path: &std::path::Path) -> Result<bool, String> {
+    // Read the config file content
+    let content = fs::read_to_string(config_path)
+        .map_err(|e| format!("Failed to read config file {:?}: {}", config_path, e))?;
+
+    // Parse the TOML content
+    let mut config_value = content
+        .parse::<Value>()
+        .map_err(|e| format!("Failed to parse TOML from {:?}: {}", config_path, e))?;
+
+    // Get the current enabled state, default to false if missing or not a boolean
+    let current_enabled = config_value
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Toggle the state
+    let new_enabled_state = !current_enabled;
+
+    // Update the value in the TOML table
+    if let Some(table) = config_value.as_table_mut() {
+        table.insert("enabled".to_string(), Value::Boolean(new_enabled_state));
+    } else {
+        return Err(format!(
+            "Config file {:?} is not a valid TOML table",
+            config_path
+        ));
+    }
+
+    // Serialize the updated TOML back to a string
+    let updated_content = toml::to_string_pretty(&config_value)
+        .map_err(|e| format!("Failed to serialize updated TOML: {}", e))?;
+
+    // Write the updated content back to the file
+    fs::write(config_path, updated_content)
+        .map_err(|e| format!("Failed to write updated config to {:?}: {}", config_path, e))?;
+
+    Ok(new_enabled_state)
 }

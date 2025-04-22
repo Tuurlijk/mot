@@ -184,9 +184,7 @@ Called to retrieve time entries for a specific date range.
     {
       "id": "unique-id-1",
       "description": "Task description",
-      "project_id": "project-1",
       "project_name": "Project Name",
-      "customer_id": "customer-1",
       "customer_name": "Customer Name",
       "started_at": "2023-01-01T09:00:00Z",
       "ended_at": "2023-01-01T10:30:00Z",
@@ -231,9 +229,7 @@ Called when mot is closing or unloading the plugin.
 |-------|------|-------------|
 | id | string | Unique identifier for the time entry |
 | description | string | Description of the time entry |
-| project_id | string (optional) | ID of the associated project |
 | project_name | string (optional) | Name of the associated project |
-| customer_id | string (optional) | ID of the associated customer/client |
 | customer_name | string (optional) | Name of the associated customer/client |
 | started_at | string | Start time (RFC3339 format) |
 | ended_at | string | End time (RFC3339 format) |
@@ -315,7 +311,7 @@ while read -r request; do
       later=$(date -u +"%Y-%m-%dT${hour}:%M:%SZ")
       
       # Create a JSON array with a single time entry - note the escaped quotes for valid JSON
-      time_entries="[{\"id\":\"hello-1\",\"description\":\"Hello from bash plugin\",\"project_id\":\"proj-1\",\"project_name\":\"Example Project\",\"customer_id\":\"cust-1\",\"customer_name\":\"Example Customer\",\"started_at\":\"$now\",\"ended_at\":\"$later\",\"tags\":[\"example\",\"bash\"],\"source\":\"Hello Plugin\",\"source_url\":null,\"billable\":true}]"
+      time_entries="[{\"id\":\"hello-1\",\"description\":\"Hello from bash plugin\",\"project_name\":\"Example Project\",\"customer_name\":\"Example Customer\",\"started_at\":\"$now\",\"ended_at\":\"$later\",\"tags\":[\"example\",\"bash\"],\"source\":\"Hello Plugin\",\"source_url\":null,\"billable\":true}]"
       
       send_success "$id" "$time_entries"
       ;;
@@ -371,9 +367,7 @@ def handle_get_time_entries(params, request_id):
     time_entries.append({
         "id": "python-1",
         "description": "Example from Python plugin",
-        "project_id": "proj-1",
         "project_name": "Python Project",
-        "customer_id": "cust-1",
         "customer_name": "Python Customer",
         "started_at": entry_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "ended_at": entry_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -481,9 +475,7 @@ function handleGetTimeEntries(params, id) {
   const timeEntries = [{
     id: "node-1",
     description: "Example from Node.js plugin",
-    project_id: "node-proj-1",
     project_name: "Node.js Project",
-    customer_id: "node-cust-1",
     customer_name: "Node.js Customer",
     started_at: now.toISOString(),
     ended_at: later.toISOString(),

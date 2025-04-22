@@ -55,6 +55,8 @@ pub(crate) fn render_plugins(model: &mut AppModel, area: Rect, frame: &mut Frame
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Pair("Esc", t!("ui_shortcut_back").as_ref()),
         Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
+        Shortcut::Pair("Space", t!("ui_shortcut_plugin_toggle").as_ref()),
+        Shortcut::Pair("Ctrl+D", t!("ui_shortcut_plugin_debug").as_ref()),
     ])
     .with_alignment(Alignment::Right)
     .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));

@@ -29,7 +29,7 @@ pub enum Message {
     EditTimeEntryPreviousField,
     EditTimeEntrySelectContact,
     EditTimeEntrySelectProject,
-    
+
     // EditSave and EditCancel are used for both regular edit and import
     EditSave,
     EditCancel,
@@ -45,6 +45,7 @@ pub enum Message {
     PluginViewSelectNext,
     PluginViewSelectPrevious,
     PluginViewSelectRow(usize),
+    PluginToggleActivation, // New message variant
 
     Quit,
 
@@ -190,6 +191,7 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             KeyCode::Down | KeyCode::Char('j') => return Some(Message::PluginViewSelectNext),
             KeyCode::Esc | KeyCode::Char('p') => return Some(Message::PluginViewHide),
             KeyCode::Char('q') => return Some(Message::Quit), // Allow quitting
+            KeyCode::Char(' ') => return Some(Message::PluginToggleActivation), // Space to toggle
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Debug selected plugin
                 if let Some(idx) = model.plugin_view_state.selected_index {
@@ -198,15 +200,15 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                     } else {
                         vec![]
                     };
-                    
+
                     if idx < plugins.len() {
                         let plugin_name = plugins[idx].name.clone();
                         return Some(Message::DebugPluginResponse(plugin_name));
                     }
                 }
                 return None;
-            },
-            _ => return None,                                 // Ignore other keys in this mode
+            }
+            _ => return None, // Ignore other keys in this mode
         }
     }
 
@@ -265,8 +267,6 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
 
     // --- Refactored Edit State Key Handling (Regular Edit or Import Edit) ---
     if model.edit_state.active {
-        // Check if we're in import mode
-        let is_import = model.edit_state.is_import_mode();
         let edit_state = &model.edit_state;
 
         match key.code {
@@ -301,11 +301,12 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
             KeyCode::Up => {
                 match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if edit_state.selected_field == crate::model::EditField::Project {
-                            edit_state.project_autocomplete.is_dropdown_visible
-                        } else {
-                            edit_state.contact_autocomplete.is_dropdown_visible
-                        };
+                        let is_dropdown_visible =
+                            if edit_state.selected_field == crate::model::EditField::Project {
+                                edit_state.project_autocomplete.is_dropdown_visible
+                            } else {
+                                edit_state.contact_autocomplete.is_dropdown_visible
+                            };
                         if is_dropdown_visible {
                             Some(Message::AutocompletePreviousItem)
                         } else {
@@ -316,18 +317,19 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 }
             }
             KeyCode::Down => {
-                 match edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if edit_state.selected_field == crate::model::EditField::Project {
-                            edit_state.project_autocomplete.is_dropdown_visible
-                        } else {
-                            edit_state.contact_autocomplete.is_dropdown_visible
-                        };
+                        let is_dropdown_visible =
+                            if edit_state.selected_field == crate::model::EditField::Project {
+                                edit_state.project_autocomplete.is_dropdown_visible
+                            } else {
+                                edit_state.contact_autocomplete.is_dropdown_visible
+                            };
                         if is_dropdown_visible {
                             Some(Message::AutocompleteNextItem)
                         } else {
-                             // Maybe trigger refresh if dropdown not visible and input exists?
-                             // For now, do nothing.
+                            // Maybe trigger refresh if dropdown not visible and input exists?
+                            // For now, do nothing.
                             None
                         }
                     }
@@ -343,19 +345,20 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                     _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
-            KeyCode::Char(_) | KeyCode::Backspace => {
-                 match edit_state.selected_field {
-                    crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        Some(Message::AutocompleteKeyPress(key))
-                    }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)),
+            KeyCode::Char(_) | KeyCode::Backspace => match edit_state.selected_field {
+                crate::model::EditField::Project | crate::model::EditField::Contact => {
+                    Some(Message::AutocompleteKeyPress(key))
                 }
-            }
+                _ => Some(Message::EditTimeEntryKeyPress(key)),
+            },
             // Catch-all for other keys
             _ => {
-                 match edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        model.log_debug(t!("event_ignoring_unhandled_key", key = format!("{:?}", key.code)));
+                        model.log_debug(t!(
+                            "event_ignoring_unhandled_key",
+                            key = format!("{:?}", key.code)
+                        ));
                         None
                     }
                     _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass to editor for other fields
@@ -389,7 +392,9 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 KeyCode::Char('p') => Some(Message::PluginViewShow),
                 KeyCode::Char('i') => Some(Message::ImportTimeEntry),
                 KeyCode::Char('q') => Some(Message::Quit),
-                KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => Some(Message::EditTimeEntry),
+                KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
+                    Some(Message::EditTimeEntry)
+                }
                 KeyCode::Char('c') => Some(Message::TimeEntryCreate),
                 KeyCode::Char('t') => Some(Message::TimeEntryCurrentWeek),
                 KeyCode::Char('r') => Some(Message::TimeEntryRefresh),
@@ -439,11 +444,15 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
             MouseEventKind::ScrollUp => return Some(Message::PluginViewSelectNext),
             MouseEventKind::Down(event::MouseButton::Left) => {
                 if let Some(list_area) = model.plugin_list_area {
-                    if list_area.contains(ratatui::layout::Position { x: mouse.column, y: mouse.row }) {
+                    if list_area.contains(ratatui::layout::Position {
+                        x: mouse.column,
+                        y: mouse.row,
+                    }) {
                         // Adjust for list border/padding if necessary (assuming 1 row top border/padding)
                         let relative_row = mouse.row.saturating_sub(list_area.y + 1);
                         // Calculate index based on scroll offset and relative row
-                        let selected_index = model.plugin_view_state.plugin_list_state.offset() + relative_row as usize;
+                        let selected_index = model.plugin_view_state.plugin_list_state.offset()
+                            + relative_row as usize;
 
                         // TODO: Check if index is within bounds (requires knowing list length here)
                         //       We might need to pass list length or handle bounds check in update.rs

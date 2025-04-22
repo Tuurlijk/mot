@@ -28,9 +28,7 @@ use crate::model::TimeEntryForTable;
 pub struct PluginTimeEntry {
     pub id: String,
     pub description: String,
-    pub project_id: Option<String>,
     pub project_name: Option<String>,
-    pub customer_id: Option<String>,
     pub customer_name: Option<String>,
     pub started_at: String, // RFC3339 format
     pub ended_at: String,   // RFC3339 format
@@ -92,6 +90,7 @@ pub struct PluginInfo {
     pub name: String,
     pub version: String,
     pub description: Option<String>,
+    pub enabled: bool,
     pub initialized: bool,
     pub icon: Option<String>,
 }
@@ -339,11 +338,35 @@ impl PluginManager {
             return Err(eyre!("manifest.toml not found in {:?}", plugin_dir));
         }
         
-        // Check if config exists (needed for initialization)
-        if !config_path.exists() {
-             return Err(eyre!("config.toml not found in {:?}", plugin_dir));
-        }
+        // Config existence check is done here, read content for 'enabled' flag
+        let (enabled, config_read_error) = match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                match content.parse::<toml::Value>() {
+                    Ok(config_value) => {
+                        // Default to true if key is missing or not a boolean
+                        let enabled_flag = config_value
+                            .get("enabled")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true);
+                        (enabled_flag, None) // Return enabled flag and no error
+                    }
+                    Err(e) => {
+                        // Config exists but couldn't parse, default to enabled=true, log error
+                        (true, Some(eyre!("Failed to parse config.toml {:?}: {}, defaulting to enabled=true", config_path, e)))
+                    }
+                }
+            }
+            Err(_) => {
+                // Config file doesn't exist or can't be read, default to enabled=true and report error
+                 (true, Some(eyre!("config.toml not found or unreadable in {:?}, defaulting to enabled=true", plugin_dir)))
+            }
+        };
         
+        // Log any error encountered while reading the config
+        if let Some(err) = config_read_error {
+            log::warn!("{}", err);
+        }
+
         // Parse manifest.toml
         let manifest_content = fs::read_to_string(&manifest_path)?;
         let manifest: Manifest = toml::from_str(&manifest_content)?;
@@ -391,11 +414,12 @@ impl PluginManager {
             .kill_on_drop(true) // Ensure process is killed if Plugin struct is dropped
             .spawn()?;
         
-        // Create plugin info
+        // Create plugin info, now including the read 'enabled' status
         let plugin_info = PluginInfo {
             name: manifest.plugin.name.clone(),
             version: manifest.plugin.version.clone(),
             description: manifest.plugin.description.clone(),
+            enabled, // Use the value read from config.toml
             initialized: false, // Start as not initialized
             icon: manifest.plugin.icon.clone(),
         };
@@ -423,6 +447,14 @@ impl PluginManager {
         
         for plugin_name in plugins_to_init {
             if let Some(plugin) = self.plugins.get_mut(&plugin_name) {
+                // Skip initialization if the plugin is disabled
+                if !plugin.info.enabled {
+                    log::info!("Skipping initialization for disabled plugin: {}", plugin_name);
+                    // Add a specific result indicating it was skipped due to being disabled
+                    results.push((plugin_name.clone(), Err(t!("plugin_init_skipped_disabled", name = plugin_name).to_string())));
+                    continue;
+                }
+
                 // Use the stored directory path instead of plugin name
                 let config_path = plugin.directory.join("config.toml")
                     .to_string_lossy()
@@ -497,8 +529,12 @@ impl PluginManager {
             eyre!("Plugin not found: {}", plugin_name)
         })?;
         
+        // Check if plugin is enabled and initialized before proceeding
+        if !plugin.info.enabled {
+            return Err(eyre!("Plugin '{}' is disabled", plugin_name));
+        }
         if !plugin.info.initialized {
-            return Err(eyre!("Plugin {} is not initialized", plugin_name));
+            return Err(eyre!("Plugin '{}' is not initialized", plugin_name));
         }
         
         let params = serde_json::json!({
@@ -534,8 +570,16 @@ impl PluginManager {
                     all_entries.extend(entries);
                 }
                 Err(err) => {
-                    errors.push((plugin_name.clone(), 
-                                t!("plugin_get_entries_error", name = plugin_name, error = err.to_string()).to_string()));
+                    // Check if the error is specifically about being disabled or uninitialized
+                    let err_string = err.to_string();
+                    if err_string.contains("is disabled") || err_string.contains("is not initialized") {
+                        // Log as info, don't add to user-facing errors
+                        log::info!("Skipping entries for plugin '{}': {}", plugin_name, err_string);
+                    } else {
+                        // Actual error getting entries, report it
+                        errors.push((plugin_name.clone(), 
+                                    t!("plugin_get_entries_error", name = plugin_name, error = err_string).to_string()));
+                    }
                 }
             }
         }
@@ -586,10 +630,10 @@ impl PluginManager {
             .collect()
     }
     
-    /// Check if a plugin with the given name is loaded and initialized
+    /// Check if a plugin with the given name is loaded, enabled, and initialized
     pub fn has_plugin(&self, name: &str) -> bool {
         self.plugins.get(name)
-            .map(|p| p.info.initialized)
+            .map(|p| p.info.enabled && p.info.initialized)
             .unwrap_or(false)
     }
 

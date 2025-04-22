@@ -32,6 +32,7 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         Shortcut::Pair("f", t!("ui_shortcut_filter").as_ref()),
         Shortcut::Pair("c", t!("ui_shortcut_create").as_ref()),
         Shortcut::Pair("e", t!("ui_shortcut_edit").as_ref()),
+        Shortcut::Pair("i", t!("ui_shortcut_import").as_ref()),
         Shortcut::Pair("d", t!("ui_shortcut_delete").as_ref()),
         Shortcut::Pair("p", t!("ui_shortcut_plugins").as_ref()),
         Shortcut::Pair("x", t!("ui_shortcut_export").as_ref()),

@@ -11,9 +11,6 @@ use rust_i18n::t;
 
 /// Render the time entry edit form
 pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Frame) {
-    // Check if we're in import mode
-    let is_import = model.edit_state.is_import_mode();
-    
     // Get a reference to the edit state
     let edit_state = &mut model.edit_state;
     
