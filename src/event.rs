@@ -281,17 +281,17 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                         if edit_state.project_autocomplete.is_dropdown_visible {
                             Some(Message::AutocompleteSelect)
                         } else {
-                            Some(Message::EditSave) // Save if dropdown not visible
+                            None
                         }
                     }
                     crate::model::EditField::Contact => {
                         if edit_state.contact_autocomplete.is_dropdown_visible {
                             Some(Message::AutocompleteSelect)
                         } else {
-                            Some(Message::EditSave) // Save if dropdown not visible
+                            None
                         }
                     }
-                    _ => Some(Message::EditSave), // Save for all other fields
+                    _ => None,
                 }
             }
             KeyCode::Tab => Some(Message::EditTimeEntryNextField),

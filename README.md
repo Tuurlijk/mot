@@ -85,20 +85,22 @@ MOT includes a plugin system that allows integrating time entries from external 
 
 ### Using Plugins
 
-- Press `p` in the main view to see loaded plugins
-- Time entries from plugins appear alongside regular MoneyBird entries
-- Plugin entries are visible but read-only
+- Press `p` in the main view to see loaded plugins.
+- In the plugin view, use `Space` to toggle a plugin's activation status (requires restart to take effect) and `Ctrl+D` to debug the selected plugin.
+- Time entries from enabled and initialized plugins appear alongside regular MoneyBird entries in the main view.
+- Plugin entries can be imported into MoneyBird by selecting them and pressing `i`.
 
 ### Plugin Location
 
-Plugins are discovered in:
-- Linux/macOS: `~/.config/mot/plugins/` 
-- Windows: `%APPDATA%\mot\plugins\`
+The application automatically detects the standard configuration directory for your system:
+- **Linux**: Uses `$XDG_CONFIG_HOME/mot/plugins` or defaults to `$HOME/.config/mot/plugins/`
+- **macOS**: Uses `~/Library/Application Support/mot/plugins/`
+- **Windows**: Uses `%APPDATA%\mot\plugins\`
 
 Each plugin should be in its own subdirectory with the required files:
-1. `manifest.toml` - Plugin metadata
-2. `config.toml` - Plugin configuration
-3. Executable - The plugin binary or script
+1. `manifest.toml` - Plugin metadata.
+2. `config.toml` - Plugin configuration (including an `enabled = true/false` key).
+3. Executable - The plugin binary or script.
 
 ### Example Plugins
 
@@ -150,6 +152,7 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 -   `e` / `Enter` / `Space`: Edit selected time entry
 -   `d` / `Delete`: Delete selected time entry (with confirmation)
 -   `x`: Export current view to CSV (with confirmation)
+-   `i`: Import selected *plugin* time entry into MoneyBird
 
 ### Search Mode (Filter)
 
@@ -179,6 +182,8 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 
 -   `↑` / `k`: Select previous plugin
 -   `↓` / `j`: Select next plugin
+-   `Space`: Toggle activation status of selected plugin (requires restart)
+-   `Ctrl+D`: Debug selected plugin (show response / initialization info)
 -   `p` / `Esc`: Return to main view
 -   `q`: Quit the application
 
@@ -203,7 +208,10 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 - [x] Internal logging + logging pane
 - [x] CRUD operations for time entries
 - [x] Plugin system for external time entries
-- [ ] Pull time logs from gitlab using dialogue
+- [x] Import plugin time entries into MoneyBird
+- [x] Toggle plugin activation
+- [x] Plugin debugging tools
+- [ ] Pull time logs from gitlab using dialogue (Example plugin idea)
 - [ ] Contact browser
 - [ ] CRUD operations for contacts
 - [ ] Project browser
