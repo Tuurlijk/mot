@@ -275,8 +275,14 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 Some(Message::EditSave)
             }
             KeyCode::Enter => {
-                // Check if we are in an autocomplete field with the dropdown visible
-                match edit_state.selected_field {
+                match model.edit_state.selected_field {
+                    crate::model::EditField::Description => {
+                        if key.modifiers.contains(event::KeyModifiers::SHIFT) {
+                            Some(Message::EditTimeEntryKeyPress(key)) // Let the textarea handle it
+                        } else {
+                            None
+                        }
+                    }
                     crate::model::EditField::Project => {
                         if edit_state.project_autocomplete.is_dropdown_visible {
                             Some(Message::AutocompleteSelect)
@@ -291,7 +297,7 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                             None
                         }
                     }
-                    _ => None,
+                    _ => None, // Default for other fields
                 }
             }
             KeyCode::Tab => Some(Message::EditTimeEntryNextField),
