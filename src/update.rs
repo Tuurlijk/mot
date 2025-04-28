@@ -593,6 +593,26 @@ fn get_active_edit_state_mut(model: &mut AppModel) -> Option<&mut EditState> {
     }
 }
 
+/// Formats a time input string. If it's a valid hour (0-23), formats as HH:00.
+/// Otherwise, returns the original string.
+fn format_time_input(time_str: &str) -> String {
+    // Trim whitespace for cleaner parsing
+    let trimmed_str = time_str.trim();
+    
+    // Try parsing as just an hour
+    match trimmed_str.parse::<u8>() {
+        Ok(hour) if hour < 24 => {
+            // Valid hour, format as HH:00
+            format!("{:02}:00", hour)
+        }
+        _ => {
+            // Not a simple hour or parsing failed, return original string
+            // We assume it might already be HH:MM or invalid
+            time_str.to_string()
+        }
+    }
+}
+
 /// Process a message and update the model state
 pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message> {
     match msg {
@@ -993,37 +1013,21 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             }
         }
         Message::EditTimeEntryNextField => {
-            // Get the right edit state based on whether we're in import mode or not
-            let edit_state = if model.edit_state.is_import_mode() {
-                &mut model.edit_state
-            } else if model.edit_state.active {
-                &mut model.edit_state
-            } else {
-                return None; // Not in edit mode, ignore
-            };
-
-            const FIELD_ORDER: &[crate::model::EditField] = &[
-                crate::model::EditField::Description,
-                crate::model::EditField::Contact,
-                crate::model::EditField::Project,
-                crate::model::EditField::StartTime,
-                crate::model::EditField::EndTime,
-                crate::model::EditField::StartDate,
-                crate::model::EditField::EndDate,
-            ];
-            update_edit_field_from_editor(edit_state);
-            if let Some(current_index) = FIELD_ORDER
-                .iter()
-                .position(|&field| field == edit_state.selected_field)
-            {
-                let next_index = (current_index + 1) % FIELD_ORDER.len();
-                edit_state.selected_field = FIELD_ORDER[next_index];
-                initialize_editor_or_autocomplete(edit_state);
-            }
-            None
-        }
-        Message::EditTimeEntryPreviousField => {
             if let Some(edit_state) = get_active_edit_state_mut(model) {
+                let field_before_move = edit_state.selected_field;
+                update_edit_field_from_editor(edit_state);
+                
+                // Format the time field if focus is leaving StartTime or EndTime
+                match field_before_move {
+                    EditField::StartTime => {
+                        edit_state.start_time = format_time_input(&edit_state.start_time);
+                    }
+                    EditField::EndTime => {
+                        edit_state.end_time = format_time_input(&edit_state.end_time);
+                    }
+                    _ => {}
+                }
+
                 const FIELD_ORDER: &[crate::model::EditField] = &[
                     crate::model::EditField::Description,
                     crate::model::EditField::Contact,
@@ -1033,7 +1037,42 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                     crate::model::EditField::StartDate,
                     crate::model::EditField::EndDate,
                 ];
+                if let Some(current_index) = FIELD_ORDER
+                    .iter()
+                    .position(|&field| field == edit_state.selected_field)
+                {
+                    let next_index = (current_index + 1) % FIELD_ORDER.len();
+                    edit_state.selected_field = FIELD_ORDER[next_index];
+                    initialize_editor_or_autocomplete(edit_state);
+                }
+            }
+            None
+        }
+        Message::EditTimeEntryPreviousField => {
+            if let Some(edit_state) = get_active_edit_state_mut(model) {
+                let field_before_move = edit_state.selected_field;
                 update_edit_field_from_editor(edit_state);
+                
+                // Format the time field if focus is leaving StartTime or EndTime
+                match field_before_move {
+                    EditField::StartTime => {
+                        edit_state.start_time = format_time_input(&edit_state.start_time);
+                    }
+                    EditField::EndTime => {
+                        edit_state.end_time = format_time_input(&edit_state.end_time);
+                    }
+                    _ => {}
+                }
+
+                const FIELD_ORDER: &[crate::model::EditField] = &[
+                    crate::model::EditField::Description,
+                    crate::model::EditField::Contact,
+                    crate::model::EditField::Project,
+                    crate::model::EditField::StartTime,
+                    crate::model::EditField::EndTime,
+                    crate::model::EditField::StartDate,
+                    crate::model::EditField::EndDate,
+                ];
                 if let Some(current_index) = FIELD_ORDER
                     .iter()
                     .position(|&field| field == edit_state.selected_field)
