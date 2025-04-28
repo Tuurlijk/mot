@@ -16,6 +16,9 @@ error_administration: "Administratie fout: %{error}"
 error_get_administrations: "Ophalen van administraties mislukt: %{error}"
 error_fetch_projects: "Waarschuwing: Ophalen van projecten mislukt: %{error}"
 
+# Event handling messages
+event_saving_edit: "Bewerken opslaan"
+
 # Success messages
 success_connection: "Succesvol verbonden met MoneyBird API"
 success_colors_initialized: "UI kleuren geïnitialiseerd"

@@ -16,6 +16,9 @@ error_administration: "Administration error: %{error}"
 error_get_administrations: "Failed to get administrations: %{error}"
 error_fetch_projects: "Warning: Failed to fetch projects: %{error}"
 
+# Event handling messages
+event_saving_edit: "Saving edit"
+
 # Success messages
 success_connection: "Successfully connected to MoneyBird API"
 success_colors_initialized: "UI colors initialized"

@@ -30,7 +30,6 @@ pub enum Message {
     EditTimeEntrySelectContact,
     EditTimeEntrySelectProject,
 
-    // EditSave and EditCancel are used for both regular edit and import
     EditSave,
     EditCancel,
 
@@ -272,6 +271,7 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         match key.code {
             // --- Global Edit Keys ---
             KeyCode::Char('s') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
+                model.log_debug(t!("event_saving_edit"));
                 Some(Message::EditSave)
             }
             KeyCode::Enter => {

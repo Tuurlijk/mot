@@ -25,7 +25,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     // Set up shortcuts for the edit view
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Pair("Tab", t!("ui_shortcut_change_focus").as_ref()),
-        Shortcut::Pair("Enter", t!("ui_shortcut_save").as_ref()),
+        Shortcut::Pair("Ctrl+S", t!("ui_shortcut_save").as_ref()),
         Shortcut::Pair("Esc", t!("ui_shortcut_cancel").as_ref()),
     ])
     .with_alignment(Alignment::Right)

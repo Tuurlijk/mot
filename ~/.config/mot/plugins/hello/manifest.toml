@@ -1,9 +1,0 @@
-[plugin]
-name = "hello"
-version = "0.1.0"
-description = "A simple example plugin that returns a static time entry"
-icon = "🐚"  # Shell emoji for bash script
-
-[executable]
-default = "hello.sh"
-windows = "hello.sh"  # Same for Windows, but would need modifications to work 
