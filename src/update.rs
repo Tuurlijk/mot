@@ -912,7 +912,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 let client = model.client.clone();
                 let user_id = model.config.user_id.clone().unwrap_or_default();
 
-                if is_creating {
+                if is_creating || was_import {
                     // Log using immutable borrow of model
                     model.log_notice(format!("Creating new time entry: {}", description));
                     let endpoint = "time_entries.json";
