@@ -15,7 +15,7 @@ fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
         custom_icon.clone()
     } else if time_entry.source.to_lowercase() == "moneybird" {
         // Use blue circle for Moneybird
-        "🔵".to_string()
+        "🐦".to_string()
     } else if let Some(plugin_name) = &time_entry.plugin_name {
         // Use the plugin name for consistent icons
         ui::get_default_icon(plugin_name)

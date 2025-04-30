@@ -219,6 +219,9 @@ Simply run `mot` to start the application. Use the following keyboard shortcuts:
 - [x] Add ci workflows
 - [x] Localization (English and Dutch)
 - [ ] Additional language support (contributions welcome!)
+- [ ] Show daily total hours in column per client in time entry view
+- [ ] When a time entry from a plugin is selected, mark moneybird entries for that client and day so they stand out
+- [ ] Loading indicator when fetching plugin time entries
 
 ## 🤝 Contributing
 

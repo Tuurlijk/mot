@@ -35,7 +35,7 @@ supports-color = "3.0.0"
 terminal-light = "1.7.0"
 rust-i18n = "3.1.4"
 locale_config = "0.3.0"
-jsonrpsee = { version = "0.22.0", features = ["full"] }
+jsonrpsee = { version = "0.25.1", features = ["full"] }
 log = "0.4"
 
 [build-dependencies]
