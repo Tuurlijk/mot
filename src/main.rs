@@ -87,47 +87,68 @@ async fn main() -> color_eyre::Result<()> {
     model.log_success(t!("success_colors_initialized"));
 
     // Initialize plugin system
-    if let Ok(mut manager) = plugin::PluginManager::new() {
-        // Discover plugins
-        match manager.discover_plugins().await {
-            Ok(discover_results) => {
-                // Display results
-                if discover_results.is_empty() {
-                    println!("No plugins found or loaded");
-                } else {
-                    for (_path, result) in discover_results {
-                        match result {
-                            Ok(msg) => println!("✅ {}", msg),
-                            Err(err) => println!("❌ {}", err),
-                        }
-                    }
-                }
-                
-                // Initialize the plugins
-                match manager.initialize_plugins().await {
-                    Ok(init_results) => {
-                        // Display initialization results
-                        for (plugin_name, result) in init_results {
+    model.log_notice(t!("plugin_init_starting"));
+    match plugin::PluginManager::new() {
+        Ok(mut manager) => {
+            // Discover plugins
+            match manager.discover_plugins().await {
+                Ok(discover_results) => {
+                    if discover_results.is_empty() {
+                        model.log_notice(t!("plugin_init_none_found"));
+                    } else {
+                        for (_path, result) in discover_results {
                             match result {
-                                Ok(_) => println!("✅ Initialized plugin: {}", plugin_name),
-                                Err(err) => println!("❌ Failed to initialize plugin {}: {}", plugin_name, err),
+                                Ok(msg) => model.log_success(msg), // Log success, don't show modal
+                                Err(err) => {
+                                    let err_msg = format!("{} {} {}", t!("plugin_init_discover_error"), t!("plugin_error_details"), err);
+                                    model.log_error(err_msg.clone());
+                                    ui::show_error(&mut model, err_msg);
+                                }
                             }
                         }
-                        
-                        model.plugin_manager = Some(manager);
                     }
-                    Err(e) => {
-                        println!("Failed to initialize plugins: {}", e);
+
+                    // Initialize the discovered plugins
+                    match manager.initialize_plugins().await {
+                        Ok(init_results) => {
+                            for (plugin_name, result) in init_results {
+                                match result {
+                                    Ok(_) => model.log_success(t!("plugin_init_success", name = plugin_name)),
+                                    Err(err) => {
+                                        let err_msg = t!("plugin_init_error", name = plugin_name, error = err.to_string());
+                                        model.log_error(err_msg.clone());
+                                        ui::show_error(&mut model, err_msg);
+                                    }
+                                }
+                            }
+                            // Only assign manager if initialization was attempted (even if some failed)
+                            model.plugin_manager = Some(manager);
+                            model.log_notice(t!("plugin_init_finished"));
+                        }
+                        Err(e) => {
+                            let err_msg = t!("plugin_init_error_all", error = e.to_string());
+                            model.log_error(err_msg.clone());
+                            ui::show_error(&mut model, err_msg);
+                            // Assign manager even if initialization failed, maybe discovery worked?
+                            model.plugin_manager = Some(manager);
+                        }
                     }
                 }
-            }
-            Err(e) => {
-                println!("Failed to discover plugins: {}", e);
+                Err(e) => {
+                    let err_msg = t!("plugin_init_discover_error_all", error = e.to_string());
+                    model.log_error(err_msg.clone());
+                    ui::show_error(&mut model, err_msg);
+                    // Manager instance likely invalid here, do not assign
+                }
             }
         }
-    } else {
-        println!("Plugin system not available");
-    }
+        Err(e) => {
+            // Error creating PluginManager itself
+            let err_msg = t!("plugin_init_manager_error", error = e.to_string());
+            model.log_error(err_msg.clone());
+            ui::show_error(&mut model, err_msg);
+        }
+    };
 
     // Try to get administration information if we have connectivity
     if !model.has_blocking_error() {
