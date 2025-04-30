@@ -406,10 +406,10 @@ async fn initialize_time_entry_import(model: &mut AppModel) -> Option<Message> {
     model.edit_state.original_entry = Some(selected_entry.clone());
 
     // Initialize edit state with data from the selected entry
-    let mut edit_state = EditState::default();
-
-    // Set fields from the plugin entry
-    edit_state.description = selected_entry.description.clone();
+    let mut edit_state = EditState {
+        description: selected_entry.description.clone(),
+        ..Default::default()
+    };
 
     // Parse start_date and start_time from started_at
     let admin_timezone = model
@@ -706,12 +706,14 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
         }
         Message::TimeEntryCreate => {
             model.log_notice(t!("update_log_initiating_create").to_string());
-            let mut edit_state = EditState::default();
-            edit_state.edit_type = EditType::Create;
-            edit_state.active = true;
-            edit_state.time_entry_id = None;
-            edit_state.editor = TextArea::default();
-            edit_state.selected_field = crate::model::EditField::Description;
+            let mut edit_state = EditState {
+                edit_type: EditType::Create,
+                active: true,
+                time_entry_id: None,
+                editor: TextArea::default(),
+                selected_field: crate::model::EditField::Description,
+                ..Default::default()
+            };
             let admin_timezone_str = model
                 .administration
                 .time_zone
