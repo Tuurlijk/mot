@@ -3,7 +3,7 @@
 strip = true
 
 # Link Time Optimization (LTO) for smaller/faster code
-lto = true
+lto = "fat"
 
 # Reduce Parallel Code Generation Units for better optimization
 codegen-units = 1
@@ -13,6 +13,3 @@ opt-level = 3
 
 incremental = true
 debug = false
-
-# Enable Link Time Optimization
-lto = "fat"
