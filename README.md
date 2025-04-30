@@ -116,6 +116,12 @@ examples/plugins/install-python-plugin.sh
 
 For detailed plugin development information, see [docs/Plugins.md](docs/Plugins.md).
 
+### Available Community Plugins
+
+Besides the examples included in the repository, here's a known community plugin:
+
+- **[mot-plugin-gitlab](https://crates.io/crates/mot-plugin-gitlab)**: Fetches time tracking logs directly from GitLab activity and commit messages.
+
 ## 🌐 Localization
 
 MOT provides full internationalization support for all user-facing text:

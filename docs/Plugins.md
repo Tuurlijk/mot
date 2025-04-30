@@ -526,6 +526,12 @@ rl.on('line', (line) => {
 });
 ```
 
+### External Examples
+
+Beyond the simple examples included in this repository, you can find real-world plugins developed by the community:
+
+- **[mot-plugin-gitlab](https://crates.io/crates/mot-plugin-gitlab)**: An example of a plugin written in Rust and published to crates.io that integrates with the GitLab API to fetch time tracking data. Check its source code for a more complex implementation example.
+
 ## Debugging Plugins
 
 If your plugin isn't working as expected:
