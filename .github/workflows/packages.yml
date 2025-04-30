@@ -703,8 +703,6 @@ jobs:
           
           # Store the body content in a file for inspection
           echo "$EXISTING_BODY" > existing_body.txt
-          
-          echo "EXISTING_BODY=$EXISTING_BODY" >> $GITHUB_ENV
 
       - name: Get All Assets (Debug Step 3)
         id: get_assets
@@ -826,10 +824,15 @@ jobs:
       - name: Combine Content (Debug Step 5)
         id: combine_content
         run: |
-          # Create a simplified combined body
-          if [ -n "$EXISTING_BODY" ]; then
-            echo "Using existing body and appending real content"
-            echo "$EXISTING_BODY" > combined_body.md
+          # Check if the existing body file exists and is not empty
+          if [[ -s existing_body.txt ]]; then
+            echo "Using existing body from file and appending real content"
+            cat existing_body.txt > combined_body.md
+            # Add a newline if the existing body doesn't end with one, before appending
+            if [[ $(tail -c1 existing_body.txt | wc -l) -eq 0 ]]; then
+              echo "" >> combined_body.md
+            fi
+            echo "" >> combined_body.md # Add blank line separator
             cat real_assets.md >> combined_body.md
           else
             echo "Creating a new body with version and real content"
