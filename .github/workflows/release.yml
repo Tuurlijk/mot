@@ -13,8 +13,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # Optimize compilation speed and binary size
-  RUSTFLAGS: "-C link-arg=-s"
+  # Optimize compilation speed and binary size (moved to .cargo/config.toml)
+  # RUSTFLAGS: "-C link-arg=-s"
 
 jobs:
   # Automatically create a GitHub Release when a tag is pushed

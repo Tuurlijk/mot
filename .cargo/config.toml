@@ -1,0 +1,18 @@
+[profile.release]
+# Strip debuginfo from the binary to reduce size
+strip = true
+
+# Link Time Optimization (LTO) for smaller/faster code
+lto = true
+
+# Reduce Parallel Code Generation Units for better optimization
+codegen-units = 1
+
+# Optimize: 's' for size, 'z' for tiny size, '3' for speed
+opt-level = 3
+
+incremental = true
+debug = false
+
+# Enable Link Time Optimization
+lto = "fat"
