@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, BorderType, Borders, Padding, TableState, ListState},
+    widgets::{Block, BorderType, Borders, ListState, Padding, TableState},
 };
 use rust_i18n::t;
 use supports_color::ColorLevel;
@@ -65,14 +65,12 @@ pub(crate) struct SearchState {
     pub(crate) text_input: TextArea<'static>,
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PluginViewState {
     pub active: bool,
     pub selected_index: Option<usize>,
     pub plugin_list_state: ListState,
 }
-
 
 #[derive(Clone, Default)]
 pub(crate) struct ModalStack {
@@ -209,8 +207,8 @@ pub(crate) struct TimeEntryForTable {
     pub started_at: String,
     pub ended_at: String,
     pub billable: bool,
-    pub source: String, // Plugin name or "moneybird"
-    pub icon: Option<String>, // Custom icon from plugin manifest
+    pub source: String,              // Plugin name or "moneybird"
+    pub icon: Option<String>,        // Custom icon from plugin manifest
     pub plugin_name: Option<String>, // Matched plugin name for consistency
 }
 
@@ -233,15 +231,15 @@ pub struct EditState {
     pub contact_id: Option<String>,
     pub contact_name: String, // Display name
     pub project_id: Option<String>,
-    pub project_name: String, // Display name
-    pub start_time: String,   // HH:MM format
-    pub end_time: String,     // HH:MM format
-    pub start_date: String,   // YYYY-MM-DD format
-    pub end_date: String,     // YYYY-MM-DD format
+    pub project_name: String,          // Display name
+    pub start_time: String,            // HH:MM format
+    pub end_time: String,              // HH:MM format
+    pub start_date: String,            // YYYY-MM-DD format
+    pub end_date: String,              // YYYY-MM-DD format
     pub time_entry_id: Option<String>, // Only set when editing existing
     pub editor: TextArea<'static>,     // Active text input
     pub field_x_offset: usize,         // Text offset in editor
-    
+
     // For import operation
     pub original_entry: Option<TimeEntryForTable>,
 
@@ -368,12 +366,12 @@ impl EditState {
             user_id: None,
         }
     }
-    
+
     /// Check if this is in import mode
     pub fn is_import_mode(&self) -> bool {
         self.edit_type == EditType::Import
     }
-    
+
     /// Check if this is in create mode
     pub fn is_create_mode(&self) -> bool {
         self.edit_type == EditType::Create

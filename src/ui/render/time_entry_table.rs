@@ -1,5 +1,5 @@
-use crate::{datetime, AppModel, TimeEntryForTable};
 use crate::ui;
+use crate::{datetime, AppModel, TimeEntryForTable};
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Modifier, Style};
@@ -87,8 +87,7 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
     let total_minutes = total_minutes % 60;
 
     let total_time_style = Style::default().bold().yellow();
-    let total_time_str =
-        datetime::format_duration(total_hours, total_minutes, total_time_style);
+    let total_time_str = datetime::format_duration(total_hours, total_minutes, total_time_style);
 
     let title_week_prefix = t!("ui_table_title_week");
     let title_separator = t!("ui_table_title_separator");

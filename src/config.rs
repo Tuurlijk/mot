@@ -1,20 +1,17 @@
 use config::{Config, File};
+use locale_config::Locale;
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use locale_config::Locale;
 
 pub fn detect_system_language() -> Option<String> {
     let locale = Locale::user_default();
     let locale_str = locale.to_string();
-    
-    let lang_code = locale_str
-        .split(['-', '_', '.'])
-        .next()?
-        .to_lowercase();
-    
+
+    let lang_code = locale_str.split(['-', '_', '.']).next()?.to_lowercase();
+
     if ["en", "nl"].contains(&lang_code.as_str()) {
         Some(lang_code)
     } else {
@@ -188,8 +185,11 @@ mod tests {
         let language = detect_system_language();
         if let Some(lang) = language {
             // If a language was detected, it should be one we support
-            assert!(["en", "nl"].contains(&lang.as_str()), 
-                "Detected language '{}' should be one of our supported languages", lang);
+            assert!(
+                ["en", "nl"].contains(&lang.as_str()),
+                "Detected language '{}' should be one of our supported languages",
+                lang
+            );
         }
         // If None is returned, that's also valid if no supported language was found
     }

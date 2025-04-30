@@ -14,7 +14,7 @@ fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
         // Use custom icon from plugin manifest if available
         custom_icon.clone()
     } else if time_entry.source.to_lowercase() == "moneybird" {
-        // Use blue circle for Moneybird 
+        // Use blue circle for Moneybird
         "🐦".to_string()
     } else if let Some(plugin_name) = &time_entry.plugin_name {
         // Use the plugin name for consistent icons
@@ -139,13 +139,9 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         ),
     ));
 
-    let mut title_spans = vec![
-        Span::from(" "),
-        Span::from(icon_display),
-        Span::from(" "),
-    ];
+    let mut title_spans = vec![Span::from(" "), Span::from(icon_display), Span::from(" ")];
     title_spans.extend(client_project.clone());
-    
+
     // Add plugin information if not from Moneybird
     if selected_item.source.to_lowercase() != "moneybird" {
         if let Some(plugin_name) = &selected_item.plugin_name {
@@ -154,7 +150,7 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
             title_spans.push(Span::from(")"));
         }
     }
-    
+
     title_spans.push(Span::from(" "));
 
     let mut detail_lines: Vec<Line> = vec![Line::from(times), Line::from("")];

@@ -598,7 +598,7 @@ fn get_active_edit_state_mut(model: &mut AppModel) -> Option<&mut EditState> {
 fn format_time_input(time_str: &str) -> String {
     // Trim whitespace for cleaner parsing
     let trimmed_str = time_str.trim();
-    
+
     // Try parsing as just an hour
     match trimmed_str.parse::<u8>() {
         Ok(hour) if hour < 24 => {
@@ -1014,7 +1014,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if let Some(edit_state) = get_active_edit_state_mut(model) {
                 let field_before_move = edit_state.selected_field;
                 update_edit_field_from_editor(edit_state);
-                
+
                 // Format the time field if focus is leaving StartTime or EndTime
                 match field_before_move {
                     EditField::StartTime => {
@@ -1050,7 +1050,7 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
             if let Some(edit_state) = get_active_edit_state_mut(model) {
                 let field_before_move = edit_state.selected_field;
                 update_edit_field_from_editor(edit_state);
-                
+
                 // Format the time field if focus is leaving StartTime or EndTime
                 match field_before_move {
                     EditField::StartTime => {

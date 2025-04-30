@@ -134,10 +134,8 @@ pub fn show_info(
             message: message.into().to_string(),
             modal_type: ModalType::Info,
             buttons: Some(
-                Shortcuts::new(vec![
-                    Shortcut::Pair("Esc", t!("modal_dismiss").as_ref()),
-                ])
-                .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
+                Shortcuts::new(vec![Shortcut::Pair("Esc", t!("modal_dismiss").as_ref())])
+                    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
             ),
             id: Some(id.to_string()),
             ..Default::default()

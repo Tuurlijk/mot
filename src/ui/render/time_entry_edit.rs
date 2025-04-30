@@ -13,15 +13,15 @@ use rust_i18n::t;
 pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Frame) {
     // Get a reference to the edit state
     let edit_state = &mut model.edit_state;
-    
+
     // If edit form is not active, return early
     if !edit_state.active {
         return;
     }
-    
+
     // Cache the area for later use
     model.edit_form_area = Some(area);
-    
+
     // Set up shortcuts for the edit view
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Pair("Tab", t!("ui_shortcut_change_focus").as_ref()),
@@ -30,14 +30,14 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     ])
     .with_alignment(Alignment::Right)
     .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
-    
+
     // Derive title from the edit type
     let title = match edit_state.edit_type {
         EditType::Create => t!("ui_edit_title_create"),
         EditType::Import => t!("ui_edit_title_import"),
         EditType::Edit => t!("ui_edit_title_edit"),
     };
-    
+
     // Create the main block for the edit form
     let edit_block = model
         .appearance
@@ -46,7 +46,7 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
         .title(format!(" {} ", title))
         .title_alignment(Alignment::Center)
         .title_bottom(shortcuts.as_line());
-    
+
     // Apply the block to the area and get the inner area for the form
     frame.render_widget(edit_block, area);
 
@@ -96,13 +96,11 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
 
     // Description section
     let description_label = Paragraph::new(t!("ui_edit_field_description"))
-        .style(
-            if edit_state.selected_field == EditField::Description {
-                Style::default().add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            },
-        )
+        .style(if edit_state.selected_field == EditField::Description {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        })
         .block(
             Block::default()
                 .borders(Borders::NONE)
@@ -148,19 +146,17 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     };
     let contact_title = format!(" {} ", t!("ui_edit_field_contact"));
     let contact_placeholder = t!("ui_edit_placeholder_contact");
-    let contact_autocomplete_widget = Autocomplete::new(
-        &mut edit_state.contact_autocomplete,
-        transform_contact_fn,
-    )
-    .block(
-        Block::default()
-            .title(contact_title.clone())
-            .padding(Padding::new(1, 0, 0, 0)),
-    )
-    .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
-    .selected_style(Style::default().bg(Color::Green).fg(Color::White))
-    .dropdown_style(Style::default())
-    .placeholder(contact_placeholder.as_ref());
+    let contact_autocomplete_widget =
+        Autocomplete::new(&mut edit_state.contact_autocomplete, transform_contact_fn)
+            .block(
+                Block::default()
+                    .title(contact_title.clone())
+                    .padding(Padding::new(1, 0, 0, 0)),
+            )
+            .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
+            .selected_style(Style::default().bg(Color::Green).fg(Color::White))
+            .dropdown_style(Style::default())
+            .placeholder(contact_placeholder.as_ref());
 
     if edit_state.selected_field == EditField::Contact {
         // Use active block when selected
@@ -203,19 +199,17 @@ pub fn render_time_entry_edit(model: &mut AppModel, area: Rect, frame: &mut Fram
     };
     let project_title = format!(" {} ", t!("ui_edit_field_project"));
     let project_placeholder = t!("ui_edit_placeholder_project");
-    let project_autocomplete_widget = Autocomplete::new(
-        &mut edit_state.project_autocomplete,
-        transform_project_fn,
-    )
-    .block(
-        Block::default()
-            .title(project_title.clone())
-            .padding(Padding::new(1, 0, 0, 0)),
-    )
-    .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
-    .selected_style(Style::default().bg(Color::Green).fg(Color::White))
-    .dropdown_style(Style::default())
-    .placeholder(project_placeholder.as_ref());
+    let project_autocomplete_widget =
+        Autocomplete::new(&mut edit_state.project_autocomplete, transform_project_fn)
+            .block(
+                Block::default()
+                    .title(project_title.clone())
+                    .padding(Padding::new(1, 0, 0, 0)),
+            )
+            .input_style(Style::default().fg(model.appearance.default_foreground_color_indexed))
+            .selected_style(Style::default().bg(Color::Green).fg(Color::White))
+            .dropdown_style(Style::default())
+            .placeholder(project_placeholder.as_ref());
 
     if edit_state.selected_field == EditField::Project {
         // Use active block when selected

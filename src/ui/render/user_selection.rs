@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Rect},
     prelude::*,
     style::{Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Row, Table, List, ListItem},
+    widgets::{Block, BorderType, Borders, Cell, List, ListItem, Row, Table},
 };
 use rust_i18n::t;
 
@@ -19,20 +19,24 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
     .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     // Create ListItems instead of Rows
-    let items: Vec<ListItem> = model.users.iter().map(|user| {
-        let name = user.name.clone().unwrap_or_default();
-        let email = user.email.clone().unwrap_or_default();
-        let id = user.id.clone().unwrap_or_default();
-        // Format the user info into a single line for the list
-        let line = Line::from(vec![
-            Span::styled(format!("{:<38}", id), Style::default()), // Pad ID
-            Span::raw(" | "),
-            Span::styled(format!("{:<30}", name), Style::default().bold()), // Pad Name
-            Span::raw(" | "),
-            Span::styled(email, Style::default().italic()),
-        ]);
-        ListItem::new(line).style(model.appearance.default_style)
-    }).collect();
+    let items: Vec<ListItem> = model
+        .users
+        .iter()
+        .map(|user| {
+            let name = user.name.clone().unwrap_or_default();
+            let email = user.email.clone().unwrap_or_default();
+            let id = user.id.clone().unwrap_or_default();
+            // Format the user info into a single line for the list
+            let line = Line::from(vec![
+                Span::styled(format!("{:<38}", id), Style::default()), // Pad ID
+                Span::raw(" | "),
+                Span::styled(format!("{:<30}", name), Style::default().bold()), // Pad Name
+                Span::raw(" | "),
+                Span::styled(email, Style::default().italic()),
+            ]);
+            ListItem::new(line).style(model.appearance.default_style)
+        })
+        .collect();
 
     // Create a List widget
     let list = List::new(items)
@@ -45,7 +49,9 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
                 .title_bottom(shortcuts.as_line())
                 .style(model.appearance.default_style),
         )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD))
+        .highlight_style(
+            Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD),
+        )
         .highlight_symbol("> "); // Add a highlight symbol
 
     // Render the List widget statefully using model.user_selection_state (which is ListState)

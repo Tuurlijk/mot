@@ -70,20 +70,21 @@ pub(crate) fn get_contact_name(
 pub fn get_default_icon(name: &str) -> String {
     // Available default icons (colored circles)
     let plugin_icons = ["🔴", "🟣", "🟡", "🟠", "🟢", "⚫", "⚪", "🟤"];
-    
+
     // Normalize the string more aggressively to handle similar names
     // 1. Convert to lowercase
     // 2. Remove spaces, hyphens, and underscores
     // 3. Keep only alphanumeric characters
-    let normalized_name = name.to_lowercase()
+    let normalized_name = name
+        .to_lowercase()
         .chars()
         .filter(|c| c.is_alphanumeric())
         .collect::<String>();
-    
+
     if normalized_name.is_empty() {
         return plugin_icons[0].to_string(); // Default for empty names
     }
-    
+
     // Use a better hashing approach that produces more distinct results
     // We'll use a simple but effective hash algorithm (djb2)
     let mut hash: u32 = 5381;
@@ -91,6 +92,6 @@ pub fn get_default_icon(name: &str) -> String {
         // hash * 33 + c
         hash = hash.wrapping_mul(33).wrapping_add(c as u32);
     }
-    
+
     plugin_icons[(hash % plugin_icons.len() as u32) as usize].to_string()
 }

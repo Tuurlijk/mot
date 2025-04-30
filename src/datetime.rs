@@ -203,12 +203,13 @@ pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u64, u64) {
         (Some(start), Some(end)) => {
             let duration = end - start;
             let total_minutes = duration.num_minutes();
-            
+
             // Handle invalid dates (end before start) or unrealistically large durations
-            if !(0..=10000 * 60).contains(&total_minutes) { // Cap at 10,000 hours (over a year)
+            if !(0..=10000 * 60).contains(&total_minutes) {
+                // Cap at 10,000 hours (over a year)
                 return (0, 0);
             }
-            
+
             let hours = total_minutes / 60;
             let minutes = total_minutes % 60;
 
@@ -280,7 +281,10 @@ pub(crate) fn format_time_range_from_time_entry(
 }
 
 /// Parse a datetime string into separate date and time components for the edit form
-pub fn parse_datetime_for_edit(datetime_str: &str, timezone: &str) -> (Option<String>, Option<String>) {
+pub fn parse_datetime_for_edit(
+    datetime_str: &str,
+    timezone: &str,
+) -> (Option<String>, Option<String>) {
     // Parse the datetime string
     match parse_iso_datetime(datetime_str, timezone) {
         Some(dt) => {
@@ -290,7 +294,7 @@ pub fn parse_datetime_for_edit(datetime_str: &str, timezone: &str) -> (Option<St
             let time = dt.format("%H:%M").to_string();
             (Some(date), Some(time))
         }
-        None => (None, None)
+        None => (None, None),
     }
 }
 

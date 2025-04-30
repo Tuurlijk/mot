@@ -21,7 +21,7 @@ fn get_plugin_icon(plugin: &PluginInfo, default_style: Style) -> Span {
         // Use the centralized function for default icons
         ui::get_default_icon(&plugin.name)
     };
-    
+
     Span::styled(format!("{} ", icon_text), default_style)
 }
 
@@ -43,7 +43,12 @@ fn get_status_span(initialized: bool) -> Span<'static> {
 }
 
 /// Create a detail line with label and value
-fn create_detail_line<'a>(label: &'a str, value: &'a str, label_style: Style, value_style: Style) -> Line<'a> {
+fn create_detail_line<'a>(
+    label: &'a str,
+    value: &'a str,
+    label_style: Style,
+    value_style: Style,
+) -> Line<'a> {
     Line::from(vec![
         Span::styled(format!("{}: ", label), label_style),
         Span::styled(value, value_style),
@@ -144,11 +149,20 @@ fn render_plugin_list(model: &mut AppModel, frame: &mut Frame, area: Rect, plugi
         .highlight_symbol("> "); // Always show highlight symbol
 
     // Render the stateful list using the ListState from the model
-    frame.render_stateful_widget(plugin_list, area, &mut model.plugin_view_state.plugin_list_state);
+    frame.render_stateful_widget(
+        plugin_list,
+        area,
+        &mut model.plugin_view_state.plugin_list_state,
+    );
 }
 
 /// Render the details of the selected plugin in the right panel
-fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, plugins: &[PluginInfo]) {
+fn render_plugin_details(
+    model: &mut AppModel,
+    frame: &mut Frame,
+    area: Rect,
+    plugins: &[PluginInfo],
+) {
     // Use the synced selected_index from the model state
     let selected_plugin = match model.plugin_view_state.selected_index {
         Some(idx) if idx < plugins.len() => Some(&plugins[idx]),
@@ -174,7 +188,7 @@ fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, pl
         let version_label = t!("ui_plugins_version");
         let status_label = t!("ui_plugins_status");
         let description_label = t!("ui_plugins_description");
-        
+
         // Status text
         let status_text = if plugin.initialized {
             t!("ui_plugins_initialized")
@@ -189,19 +203,19 @@ fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, pl
             bold_style,
             Style::default(),
         ));
-        
+
         detail_lines.push(create_detail_line(
-            &name_label, 
-            &plugin.name, 
-            bold_style, 
-            Style::default()
+            &name_label,
+            &plugin.name,
+            bold_style,
+            Style::default(),
         ));
-        
+
         detail_lines.push(create_detail_line(
-            &version_label, 
-            &plugin.version, 
-            bold_style, 
-            Style::default()
+            &version_label,
+            &plugin.version,
+            bold_style,
+            Style::default(),
         ));
 
         // Status line with special coloring
@@ -210,7 +224,7 @@ fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, pl
         } else {
             Style::default().fg(Color::Red)
         };
-        
+
         detail_lines.push(create_detail_line(
             &status_label,
             &status_text,
@@ -225,7 +239,7 @@ fn render_plugin_details(model: &mut AppModel, frame: &mut Frame, area: Rect, pl
             bold_style,
             Style::default(),
         ));
-        
+
         detail_lines.push(Line::from(Span::raw(description)));
 
         // Render the details widget

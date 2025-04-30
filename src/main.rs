@@ -59,8 +59,11 @@ async fn main() -> color_eyre::Result<()> {
     } else if let Some(detected_language) = config::detect_system_language() {
         // 3. System language auto-detection
         rust_i18n::set_locale(&detected_language);
-        model.log_notice(t!("notice_language_autodetected", language = detected_language));
-        
+        model.log_notice(t!(
+            "notice_language_autodetected",
+            language = detected_language
+        ));
+
         // Save the detected language to config
         model.config.language = Some(detected_language);
         if let Err(err) = config::save_configuration(&model.config) {
@@ -100,7 +103,12 @@ async fn main() -> color_eyre::Result<()> {
                             match result {
                                 Ok(msg) => model.log_success(msg), // Log success, don't show modal
                                 Err(err) => {
-                                    let err_msg = format!("{} {} {}", t!("plugin_init_discover_error"), t!("plugin_error_details"), err);
+                                    let err_msg = format!(
+                                        "{} {} {}",
+                                        t!("plugin_init_discover_error"),
+                                        t!("plugin_error_details"),
+                                        err
+                                    );
                                     model.log_error(err_msg.clone());
                                     ui::show_error(&mut model, err_msg);
                                 }
@@ -113,9 +121,14 @@ async fn main() -> color_eyre::Result<()> {
                         Ok(init_results) => {
                             for (plugin_name, result) in init_results {
                                 match result {
-                                    Ok(_) => model.log_success(t!("plugin_init_success", name = plugin_name)),
+                                    Ok(_) => model
+                                        .log_success(t!("plugin_init_success", name = plugin_name)),
                                     Err(err) => {
-                                        let err_msg = t!("plugin_init_error", name = plugin_name, error = err.to_string());
+                                        let err_msg = t!(
+                                            "plugin_init_error",
+                                            name = plugin_name,
+                                            error = err.to_string()
+                                        );
                                         model.log_error(err_msg.clone());
                                         ui::show_error(&mut model, err_msg);
                                     }
@@ -265,7 +278,10 @@ async fn main() -> color_eyre::Result<()> {
     // Handle plugin debug command if provided
     if let Some(plugin_name) = args.plugin_debug {
         if let Some(plugin_manager) = model.plugin_manager.as_mut() {
-            match plugin_manager.debug_plugin_initialization(&plugin_name).await {
+            match plugin_manager
+                .debug_plugin_initialization(&plugin_name)
+                .await
+            {
                 Ok(debug_report) => {
                     // Return early with the debug report
                     println!("{}", debug_report);
@@ -276,7 +292,11 @@ async fn main() -> color_eyre::Result<()> {
                     return Ok(());
                 }
                 Err(e) => {
-                    return Err(eyre::eyre!("Failed to debug plugin '{}': {}", plugin_name, e));
+                    return Err(eyre::eyre!(
+                        "Failed to debug plugin '{}': {}",
+                        plugin_name,
+                        e
+                    ));
                 }
             }
         } else {
@@ -321,16 +341,19 @@ async fn main() -> color_eyre::Result<()> {
             Ok(errors) => {
                 // Handle any shutdown errors
                 for (plugin_name, error_msg) in errors {
-                    model.log_error(format!("Error shutting down plugin {}: {}", plugin_name, error_msg));
+                    model.log_error(format!(
+                        "Error shutting down plugin {}: {}",
+                        plugin_name, error_msg
+                    ));
                     // We can't show modals after terminal restore, so just log the errors
                 }
-            },
+            }
             Err(e) => {
                 model.log_error(format!("Error shutting down plugins: {}", e));
             }
         }
     }
-    
+
     tui::restore_terminal()?;
     Ok(())
 }
