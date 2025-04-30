@@ -205,7 +205,7 @@ pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u64, u64) {
             let total_minutes = duration.num_minutes();
             
             // Handle invalid dates (end before start) or unrealistically large durations
-            if total_minutes < 0 || total_minutes > 10000 * 60 { // Cap at 10,000 hours (over a year)
+            if !(0..=10000 * 60).contains(&total_minutes) { // Cap at 10,000 hours (over a year)
                 return (0, 0);
             }
             

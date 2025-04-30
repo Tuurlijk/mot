@@ -66,21 +66,13 @@ pub(crate) struct SearchState {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct PluginViewState {
     pub active: bool,
     pub selected_index: Option<usize>,
     pub plugin_list_state: ListState,
 }
 
-impl Default for PluginViewState {
-    fn default() -> Self {
-        Self {
-            active: false,
-            selected_index: None,
-            plugin_list_state: ListState::default(),
-        }
-    }
-}
 
 #[derive(Clone, Default)]
 pub(crate) struct ModalStack {

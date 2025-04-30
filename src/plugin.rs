@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{self, eyre};
-use log; // Import log crate for macros
+ // Import log crate for macros
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

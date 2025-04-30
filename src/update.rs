@@ -993,10 +993,8 @@ pub(crate) async fn update(model: &mut AppModel, msg: Message) -> Option<Message
                 }
 
                 // --- Reset State (only on success) ---
-                if next_message.is_some() {
-                    if was_import || is_creating {
-                        model.edit_state = EditState::default();
-                    }
+                if next_message.is_some() && (was_import || is_creating) {
+                    model.edit_state = EditState::default();
                 }
             }
             next_message

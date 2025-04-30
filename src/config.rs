@@ -11,7 +11,7 @@ pub fn detect_system_language() -> Option<String> {
     let locale_str = locale.to_string();
     
     let lang_code = locale_str
-        .split(|c| c == '-' || c == '_' || c == '.')
+        .split(['-', '_', '.'])
         .next()?
         .to_lowercase();
     
