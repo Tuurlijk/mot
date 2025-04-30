@@ -137,6 +137,7 @@ ui_no_matching_items: "No matching items found"
 modal_error_title: "Error"
 modal_connection_error_title: "Connection Error"
 modal_cancel: "Cancel"
+modal_dismiss: "Dismiss"
 modal_ok: "OK"
 modal_press_enter_to_dismiss: "press Enter to dismiss"
 

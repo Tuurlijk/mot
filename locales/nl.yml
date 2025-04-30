@@ -137,6 +137,7 @@ ui_no_matching_items: "Geen overeenkomende items gevonden"
 modal_error_title: "Fout"
 modal_connection_error_title: "Verbindingsfout"
 modal_cancel: "Annuleren"
+modal_dismiss: "Sluiten"
 modal_ok: "OK"
 modal_press_enter_to_dismiss: "druk op Enter om te sluiten"
 
