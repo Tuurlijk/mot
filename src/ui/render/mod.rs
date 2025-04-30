@@ -1,4 +1,5 @@
 pub(crate) mod log;
+pub(crate) mod plugins;
 pub(crate) mod time_entry_detail;
 pub(crate) mod time_entry_edit;
 pub(crate) mod time_entry_search;
@@ -6,6 +7,7 @@ pub(crate) mod time_entry_table;
 pub(crate) mod user_selection;
 
 pub use log::*;
+pub use plugins::*;
 pub use time_entry_detail::*;
 pub use time_entry_edit::*;
 pub use time_entry_search::*;

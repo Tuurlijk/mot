@@ -18,18 +18,33 @@ pub enum Message {
     ConfirmModal(String),
     DismissModal(String, bool),
 
+    // Debug message for plugin development
+    DebugPluginResponse(String),
+
     EditTimeEntry,
     EditTimeEntryCancel,
     EditTimeEntryFieldClick(crate::model::EditField),
     EditTimeEntryKeyPress(KeyEvent),
     EditTimeEntryNextField,
     EditTimeEntryPreviousField,
-    EditTimeEntrySave,
     EditTimeEntrySelectContact,
     EditTimeEntrySelectProject,
 
+    EditSave,
+    EditCancel,
+
     ExecuteDeleteTimeEntry(String),
     ExecuteExport,
+
+    None, // Placeholder for no action needed
+
+    PluginViewActivate, // Activate the plugin view
+    PluginViewShow,
+    PluginViewHide,
+    PluginViewSelectNext,
+    PluginViewSelectPrevious,
+    PluginViewSelectRow(usize),
+    PluginToggleActivation, // New message variant
 
     Quit,
 
@@ -53,6 +68,9 @@ pub enum Message {
     UserConfirmSelection,
     UserSelectNext,
     UserSelectPrevious,
+
+    // Import a plugin time entry to Moneybird
+    ImportTimeEntry,
 }
 
 // Implement PartialEq for the Message enum to help with Contact Vec comparison
@@ -165,6 +183,34 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         }
     }
 
+    // --- Plugin View Mode Handling ---
+    if model.plugin_view_state.active {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => return Some(Message::PluginViewSelectPrevious),
+            KeyCode::Down | KeyCode::Char('j') => return Some(Message::PluginViewSelectNext),
+            KeyCode::Esc | KeyCode::Char('p') => return Some(Message::PluginViewHide),
+            KeyCode::Char('q') => return Some(Message::Quit), // Allow quitting
+            KeyCode::Char(' ') => return Some(Message::PluginToggleActivation), // Space to toggle
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                // Debug selected plugin
+                if let Some(idx) = model.plugin_view_state.selected_index {
+                    let plugins = if let Some(manager) = &model.plugin_manager {
+                        manager.list_plugins()
+                    } else {
+                        vec![]
+                    };
+
+                    if idx < plugins.len() {
+                        let plugin_name = plugins[idx].name.clone();
+                        return Some(Message::DebugPluginResponse(plugin_name));
+                    }
+                }
+                return None;
+            }
+            _ => return None, // Ignore other keys in this mode
+        }
+    }
+
     // Modal handling is done next
     if !model.modal_stack.is_empty() {
         // Record the modal interaction time
@@ -218,139 +264,113 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
         }
     }
 
-    // --- Refactored Edit State Key Handling ---
+    // --- Refactored Edit State Key Handling (Regular Edit or Import Edit) ---
     if model.edit_state.active {
+        let edit_state = &model.edit_state;
+
         match key.code {
             // --- Global Edit Keys ---
             KeyCode::Char('s') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
-                Some(Message::EditTimeEntrySave)
+                model.log_debug(t!("event_saving_edit"));
+                Some(Message::EditSave)
             }
-            KeyCode::Tab => Some(Message::EditTimeEntryNextField),
-            KeyCode::BackTab => Some(Message::EditTimeEntryPreviousField),
-
-            // --- Keys with Field-Dependent Behavior ---
             KeyCode::Enter => {
                 match model.edit_state.selected_field {
                     crate::model::EditField::Description => {
                         if key.modifiers.contains(event::KeyModifiers::SHIFT) {
                             Some(Message::EditTimeEntryKeyPress(key)) // Let the textarea handle it
                         } else {
-                            Some(Message::EditTimeEntryNextField) // Default Enter: move to next field
+                            None
                         }
                     }
-                    crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if model.edit_state.selected_field
-                            == crate::model::EditField::Project
-                        {
-                            model.edit_state.project_autocomplete.is_dropdown_visible
-                        } else {
-                            model.edit_state.contact_autocomplete.is_dropdown_visible
-                        };
-                        if is_dropdown_visible {
+                    crate::model::EditField::Project => {
+                        if edit_state.project_autocomplete.is_dropdown_visible {
                             Some(Message::AutocompleteSelect)
                         } else {
-                            Some(Message::EditTimeEntryNextField) // Default Enter: move to next field
+                            None
                         }
                     }
-                    _ => Some(Message::EditTimeEntryNextField), // Default for other fields
+                    crate::model::EditField::Contact => {
+                        if edit_state.contact_autocomplete.is_dropdown_visible {
+                            Some(Message::AutocompleteSelect)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None, // Default for other fields
                 }
             }
+            KeyCode::Tab => Some(Message::EditTimeEntryNextField),
+            KeyCode::BackTab => Some(Message::EditTimeEntryPreviousField),
+
+            // --- Keys with Field-Dependent Behavior ---
             KeyCode::Up => {
-                match model.edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if model.edit_state.selected_field
-                            == crate::model::EditField::Project
-                        {
-                            model.edit_state.project_autocomplete.is_dropdown_visible
-                        } else {
-                            model.edit_state.contact_autocomplete.is_dropdown_visible
-                        };
+                        let is_dropdown_visible =
+                            if edit_state.selected_field == crate::model::EditField::Project {
+                                edit_state.project_autocomplete.is_dropdown_visible
+                            } else {
+                                edit_state.contact_autocomplete.is_dropdown_visible
+                            };
                         if is_dropdown_visible {
                             Some(Message::AutocompletePreviousItem)
                         } else {
-                            // No action if dropdown not visible for now
-                            None
+                            None // No action if dropdown not visible
                         }
                     }
                     _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
             KeyCode::Down => {
-                match model.edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        let is_dropdown_visible = if model.edit_state.selected_field
-                            == crate::model::EditField::Project
-                        {
-                            model.edit_state.project_autocomplete.is_dropdown_visible
-                        } else {
-                            model.edit_state.contact_autocomplete.is_dropdown_visible
-                        };
+                        let is_dropdown_visible =
+                            if edit_state.selected_field == crate::model::EditField::Project {
+                                edit_state.project_autocomplete.is_dropdown_visible
+                            } else {
+                                edit_state.contact_autocomplete.is_dropdown_visible
+                            };
                         if is_dropdown_visible {
                             Some(Message::AutocompleteNextItem)
                         } else {
-                            // Trigger refresh if dropdown not visible and input exists?
-                            // Or maybe do nothing?
-                            None // Doing nothing for now
+                            // Maybe trigger refresh if dropdown not visible and input exists?
+                            // For now, do nothing.
+                            None
                         }
                     }
                     _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
-            KeyCode::Esc => {
-                match model.edit_state.selected_field {
-                    crate::model::EditField::Project => {
-                        // Handle Esc specifically for Project field
-                        if model.edit_state.project_autocomplete.is_dropdown_visible {
-                            model.edit_state.project_autocomplete.is_dropdown_visible = false;
-                            None // Just hide dropdown
-                        } else {
-                            Some(Message::EditTimeEntryCancel) // Esc cancels edit if dropdown hidden
-                        }
-                    }
-                    crate::model::EditField::Contact => {
-                        // Handle Esc specifically for Contact field
-                        if model.edit_state.contact_autocomplete.is_dropdown_visible {
-                            model.edit_state.contact_autocomplete.is_dropdown_visible = false;
-                            None // Just hide dropdown
-                        } else {
-                            Some(Message::EditTimeEntryCancel) // Esc cancels edit if dropdown hidden
-                        }
-                    }
-                    _ => Some(Message::EditTimeEntryCancel), // Default Esc: cancel edit mode
-                }
-            }
+            KeyCode::Esc => Some(Message::EditCancel),
             KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
-                match model.edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
                         Some(Message::AutocompleteClearInput)
                     }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass Ctrl+U to standard editor fields
+                    _ => Some(Message::EditTimeEntryKeyPress(key)),
                 }
             }
-            KeyCode::Char(_) | KeyCode::Backspace => {
-                match model.edit_state.selected_field {
-                    crate::model::EditField::Project | crate::model::EditField::Contact => {
-                        Some(Message::AutocompleteKeyPress(key))
-                    }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass character/backspace to standard editor fields
+            KeyCode::Char(_) | KeyCode::Backspace => match edit_state.selected_field {
+                crate::model::EditField::Project | crate::model::EditField::Contact => {
+                    Some(Message::AutocompleteKeyPress(key))
                 }
-            }
-            // Catch-all for any other keys (e.g., F-keys not handled above, Delete, Home, End etc.)
+                _ => Some(Message::EditTimeEntryKeyPress(key)),
+            },
+            // Catch-all for other keys
             _ => {
-                // Pass to standard editor fields if appropriate, otherwise ignore
-                match model.edit_state.selected_field {
+                match edit_state.selected_field {
                     crate::model::EditField::Project | crate::model::EditField::Contact => {
                         model.log_debug(t!(
                             "event_ignoring_unhandled_key",
                             key = format!("{:?}", key.code)
                         ));
-                        None // Ignore in Project/Contact fields as they don't use the shared editor
+                        None
                     }
-                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass to editor for Description, Dates, Times
+                    _ => Some(Message::EditTimeEntryKeyPress(key)), // Pass to editor for other fields
                 }
             }
         }
-    // --- End Refactored Edit State ---
     } else {
         // --- Handling for Non-Edit State ---
         if model.search_state.active {
@@ -375,6 +395,8 @@ fn handle_key(key: event::KeyEvent, model: &mut AppModel) -> Option<Message> {
                 KeyCode::Char('j') | KeyCode::Down => Some(Message::TimeEntrySelectNext),
                 KeyCode::Char('k') | KeyCode::Up => Some(Message::TimeEntrySelectPrevious),
                 KeyCode::Char('l') | KeyCode::Right => Some(Message::TimeEntryNextWeek),
+                KeyCode::Char('p') => Some(Message::PluginViewShow),
+                KeyCode::Char('i') => Some(Message::ImportTimeEntry),
                 KeyCode::Char('q') => Some(Message::Quit),
                 KeyCode::Char('e') | KeyCode::Char(' ') | KeyCode::Enter => {
                     Some(Message::EditTimeEntry)
@@ -403,8 +425,11 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
             y: mouse.row,
         };
 
+        // Get the field areas from the edit state
+        let field_areas = &model.edit_state.field_areas;
+
         // Check if click is on any of the stored field areas
-        for (&field, &area) in &model.edit_state.field_areas {
+        for (&field, &area) in field_areas {
             if area.contains(mouse_pos) {
                 model.log_debug(t!(
                     "update_debug_click_field",
@@ -416,6 +441,51 @@ fn handle_mouse(mouse: event::MouseEvent, model: &mut AppModel) -> Option<Messag
 
         // Click was in edit mode but not on any field
         return None;
+    }
+
+    // Handle plugin view mouse events
+    if model.plugin_view_state.active {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => return Some(Message::PluginViewSelectPrevious),
+            MouseEventKind::ScrollUp => return Some(Message::PluginViewSelectNext),
+            MouseEventKind::Down(event::MouseButton::Left) => {
+                if let Some(list_area) = model.plugin_list_area {
+                    if list_area.contains(ratatui::layout::Position {
+                        x: mouse.column,
+                        y: mouse.row,
+                    }) {
+                        // Adjust for list border/padding if necessary (assuming 1 row top border/padding)
+                        let relative_row = mouse.row.saturating_sub(list_area.y + 1);
+                        // Calculate index based on scroll offset and relative row
+                        let selected_index = model.plugin_view_state.plugin_list_state.offset()
+                            + relative_row as usize;
+
+                        // TODO: Check if index is within bounds (requires knowing list length here)
+                        //       We might need to pass list length or handle bounds check in update.rs
+                        model.log_debug(t!(
+                            "event_mouse_click_detected_plugin",
+                            row = relative_row.to_string(),
+                            index = selected_index.to_string()
+                        ));
+                        return Some(Message::PluginViewSelectRow(selected_index));
+                    }
+                }
+                return None; // Click outside list area
+            }
+            _ => return None, // Ignore other mouse events in plugin view
+        }
+    }
+
+    // Handle user selection view mouse events
+    if model.user_selection_active {
+        match mouse.kind {
+            MouseEventKind::ScrollDown => return Some(Message::UserSelectPrevious),
+            MouseEventKind::ScrollUp => return Some(Message::UserSelectNext),
+            MouseEventKind::Down(event::MouseButton::Left) => {
+                return None;
+            }
+            _ => return None, // Ignore other mouse events in user selection view
+        }
     }
 
     // Handle normal mode clicks time entry table

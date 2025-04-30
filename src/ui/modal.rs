@@ -111,14 +111,7 @@ pub fn show_confirmation(
                     Shortcut::Pair("Esc", t!("modal_cancel").as_ref()),
                     Shortcut::Pair("Enter", t!("modal_ok").as_ref()),
                 ])
-                .with_key_style(
-                    model
-                        .appearance
-                        .default_style
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                )
-                .with_label_style(model.appearance.default_style),
+                .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
             ),
             id: Some("confirmation".to_string()),
             on_confirm,
@@ -140,6 +133,10 @@ pub fn show_info(
             title: title.into().to_string(),
             message: message.into().to_string(),
             modal_type: ModalType::Info,
+            buttons: Some(
+                Shortcuts::new(vec![Shortcut::Pair("Esc", t!("modal_dismiss").as_ref())])
+                    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
+            ),
             id: Some(id.to_string()),
             ..Default::default()
         },
@@ -180,14 +177,7 @@ pub fn render_modal(model: &crate::AppModel, frame: &mut Frame) {
             "Enter",
             t!("modal_press_enter_to_dismiss").as_ref(),
         )])
-        .with_key_style(
-            model
-                .appearance
-                .default_style
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
-        .with_label_style(model.appearance.default_style);
+        .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
         let instructions = match &modal_data.buttons {
             Some(buttons) => buttons.as_line(),
             _ => dismiss_shortcut.as_line(),

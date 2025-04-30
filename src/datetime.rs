@@ -195,7 +195,7 @@ pub fn get_title_week_description(week_offset: i32) -> String {
 }
 
 /// Calculate the duration between two RFC3339 timestamps
-pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u32, u32) {
+pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u64, u64) {
     let start = DateTime::parse_from_rfc3339(started_at).ok();
     let end = DateTime::parse_from_rfc3339(ended_at).ok();
 
@@ -203,17 +203,24 @@ pub fn calculate_duration(started_at: &str, ended_at: &str) -> (u32, u32) {
         (Some(start), Some(end)) => {
             let duration = end - start;
             let total_minutes = duration.num_minutes();
+
+            // Handle invalid dates (end before start) or unrealistically large durations
+            if !(0..=10000 * 60).contains(&total_minutes) {
+                // Cap at 10,000 hours (over a year)
+                return (0, 0);
+            }
+
             let hours = total_minutes / 60;
             let minutes = total_minutes % 60;
 
-            (hours as u32, minutes as u32)
+            (hours as u64, minutes as u64)
         }
         _ => (0, 0), // Return zero duration if there's a parsing error
     }
 }
 
 /// Get a formatted duration string for display
-pub fn format_duration(hours: u32, minutes: u32, style: Style) -> Vec<Span<'static>> {
+pub fn format_duration(hours: u64, minutes: u64, style: Style) -> Vec<Span<'static>> {
     let hour_label = t!("dt_duration_hour");
     let minute_label = t!("dt_duration_minute");
 
@@ -271,6 +278,29 @@ pub(crate) fn format_time_range_from_time_entry(
         format_time(start, timezone),
         format_time(end, timezone)
     )
+}
+
+/// Parse a datetime string into separate date and time components for the edit form
+pub fn parse_datetime_for_edit(
+    datetime_str: &str,
+    timezone: &str,
+) -> (Option<String>, Option<String>) {
+    // Parse the datetime string
+    match parse_iso_datetime(datetime_str, timezone) {
+        Some(dt) => {
+            // Format the date as YYYY-MM-DD
+            let date = dt.format("%Y-%m-%d").to_string();
+            // Format the time as HH:MM
+            let time = dt.format("%H:%M").to_string();
+            (Some(date), Some(time))
+        }
+        None => (None, None),
+    }
+}
+
+/// Format date and time components into an ISO8601 datetime string
+pub fn format_datetime_from_edit(date: &str, time: &str) -> String {
+    format!("{}T{}:00Z", date, time)
 }
 
 #[cfg(test)]

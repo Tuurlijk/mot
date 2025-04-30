@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::TableState,
+    widgets::{Block, BorderType, Borders, ListState, Padding, TableState},
 };
 use rust_i18n::t;
 use supports_color::ColorLevel;
@@ -65,6 +65,13 @@ pub(crate) struct SearchState {
     pub(crate) text_input: TextArea<'static>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct PluginViewState {
+    pub active: bool,
+    pub selected_index: Option<usize>,
+    pub plugin_list_state: ListState,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct ModalStack {
     pub(crate) modals: Vec<ui::ModalData>,
@@ -113,23 +120,24 @@ pub(crate) struct Appearance {
     pub(crate) default_foreground_color_dimmed: (u8, u8, u8),
     pub(crate) default_foreground_color_dimmed_indexed: Color,
     pub(crate) default_style: Style,
+    pub(crate) default_block: Block<'static>,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        let default_fg = (0, 0, 0); // Define the default color first
+        let default_fg = (0, 0, 0);
         Self {
             color_support: None,
             color_mode: Mode::Unspecified,
-            default_foreground_color: default_fg, // Use the defined value
-            default_foreground_color_indexed: Color::Indexed(ui::rgb_to_indexed(
-                default_fg, // Use the defined value here too
-            )),
+            default_foreground_color: default_fg,
+            default_foreground_color_indexed: Color::Indexed(ui::rgb_to_indexed(default_fg)),
             default_foreground_color_dimmed: (0, 0, 0),
-            default_foreground_color_dimmed_indexed: Color::Indexed(ui::rgb_to_indexed(
-                default_fg, // Use the defined value here too
-            )),
+            default_foreground_color_dimmed_indexed: Color::Indexed(ui::rgb_to_indexed(default_fg)),
             default_style: Style::default(),
+            default_block: Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .padding(Padding::new(1, 1, 0, 0)),
         }
     }
 }
@@ -190,7 +198,7 @@ impl KeyDebounce {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct TimeEntryForTable {
     pub id: String,
     pub customer: String,
@@ -199,23 +207,41 @@ pub(crate) struct TimeEntryForTable {
     pub started_at: String,
     pub ended_at: String,
     pub billable: bool,
+    pub source: String,              // Plugin name or "moneybird"
+    pub icon: Option<String>,        // Custom icon from plugin manifest
+    pub plugin_name: Option<String>, // Matched plugin name for consistency
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct EditState {
-    pub(crate) active: bool,
-    pub(crate) entry_id: String,    // ID of the time entry being edited
-    pub(crate) description: String, // Description text
-    pub(crate) project_id: Option<String>, // Selected project ID
-    pub(crate) project_name: Option<String>, // Selected project name
-    pub(crate) contact_id: Option<String>, // Selected contact ID
-    pub(crate) contact_name: Option<String>, // Selected contact name
-    pub(crate) start_date: String,  // Start date value
-    pub(crate) start_time: String,  // Start time value
-    pub(crate) end_date: String,    // End date value
-    pub(crate) end_time: String,    // End time value
-    pub(crate) editor: TextArea<'static>, // Shared editor for all fields
-    pub(crate) selected_field: EditField, // Currently selected field
+/// Type of edit operation
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub enum EditType {
+    #[default]
+    Edit,
+    Create,
+    Import,
+}
+
+/// State for editing a time entry
+#[derive(Debug, Default, Clone)]
+pub struct EditState {
+    pub active: bool,
+    pub edit_type: EditType,
+    pub selected_field: EditField,
+    pub description: String,
+    pub contact_id: Option<String>,
+    pub contact_name: String, // Display name
+    pub project_id: Option<String>,
+    pub project_name: String,          // Display name
+    pub start_time: String,            // HH:MM format
+    pub end_time: String,              // HH:MM format
+    pub start_date: String,            // YYYY-MM-DD format
+    pub end_date: String,              // YYYY-MM-DD format
+    pub time_entry_id: Option<String>, // Only set when editing existing
+    pub editor: TextArea<'static>,     // Active text input
+    pub field_x_offset: usize,         // Text offset in editor
+
+    // For import operation
+    pub original_entry: Option<TimeEntryForTable>,
 
     // Autocomplete state for project selection
     pub(crate) project_autocomplete: AutocompleteState<Project>,
@@ -283,7 +309,7 @@ impl EditState {
         let ended_at = end_in_admin_tz.with_timezone(&Utc).to_rfc3339();
 
         crate::moneybird::types::TimeEntry {
-            id: Some(self.entry_id.clone()),
+            id: self.time_entry_id.clone(),
             description: Some(self.description.clone()),
             project_id: self.project_id.clone(),
             project: Some(Project {
@@ -340,6 +366,16 @@ impl EditState {
             user_id: None,
         }
     }
+
+    /// Check if this is in import mode
+    pub fn is_import_mode(&self) -> bool {
+        self.edit_type == EditType::Import
+    }
+
+    /// Check if this is in create mode
+    pub fn is_create_mode(&self) -> bool {
+        self.edit_type == EditType::Create
+    }
 }
 
 impl From<EditState> for crate::moneybird::types::TimeEntry {
@@ -383,7 +419,7 @@ pub(crate) struct AppModel {
     pub contacts: Vec<Contact>,
     pub users: Vec<User>,
     pub user_selection_active: bool,
-    pub user_selection_state: TableState,
+    pub user_selection_state: ListState,
     pub search_state: SearchState,
     pub appearance: Appearance,
     pub week_offset: i32, // How many weeks from current (0 = current, -1 = previous, 1 = next)
@@ -395,6 +431,11 @@ pub(crate) struct AppModel {
     pub key_debounce: KeyDebounce,
     pub table_area: Option<Rect>,
     pub edit_form_area: Option<Rect>,
+    // Plugin system
+    pub plugin_manager: Option<crate::plugin::PluginManager>,
+    pub plugin_entries: Vec<TimeEntryForTable>,
+    pub plugin_view_state: PluginViewState,
+    pub plugin_list_area: Option<Rect>,
 }
 
 impl Default for AppModel {
@@ -412,7 +453,7 @@ impl Default for AppModel {
             contacts: Vec::new(),
             users: Vec::new(),
             user_selection_active: false,
-            user_selection_state: TableState::default(),
+            user_selection_state: ListState::default(),
             search_state: SearchState::default(),
             appearance: Appearance::default(),
             week_offset: 0,
@@ -424,6 +465,10 @@ impl Default for AppModel {
             key_debounce: KeyDebounce::new(200),           // 200ms cooldown for keypresses
             table_area: None,
             edit_form_area: None,
+            plugin_manager: None,
+            plugin_entries: Vec::new(),
+            plugin_view_state: PluginViewState::default(),
+            plugin_list_area: None,
         }
     }
 }

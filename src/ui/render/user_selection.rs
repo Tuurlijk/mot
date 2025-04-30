@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Rect},
     prelude::*,
     style::{Modifier, Style},
-    widgets::{Block, BorderType, Borders, Cell, Row, Table},
+    widgets::{Block, BorderType, Borders, Cell, List, ListItem, Row, Table},
 };
 use rust_i18n::t;
 
@@ -16,68 +16,44 @@ pub fn render_user_selection(model: &mut AppModel, area: Rect, frame: &mut Frame
         Shortcut::Pair("Esc", t!("ui_shortcut_exit_user_selection").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_key_style(
-        model
-            .appearance
-            .default_style
-            .green()
-            .add_modifier(Modifier::BOLD),
-    )
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
-    let header_cells = [
-        Cell::from(t!("ui_user_id"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-        Cell::from(t!("ui_user_name"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-        Cell::from(t!("ui_user_email"))
-            .style(model.appearance.default_style.add_modifier(Modifier::BOLD)),
-    ];
-    let header = Row::new(header_cells).height(1).bottom_margin(1);
+    // Create ListItems instead of Rows
+    let items: Vec<ListItem> = model
+        .users
+        .iter()
+        .map(|user| {
+            let name = user.name.clone().unwrap_or_default();
+            let email = user.email.clone().unwrap_or_default();
+            let id = user.id.clone().unwrap_or_default();
+            // Format the user info into a single line for the list
+            let line = Line::from(vec![
+                Span::styled(format!("{:<38}", id), Style::default()), // Pad ID
+                Span::raw(" | "),
+                Span::styled(format!("{:<30}", name), Style::default().bold()), // Pad Name
+                Span::raw(" | "),
+                Span::styled(email, Style::default().italic()),
+            ]);
+            ListItem::new(line).style(model.appearance.default_style)
+        })
+        .collect();
 
-    let rows = model.users.iter().map(|user| {
-        let item = [
-            user.id.clone().unwrap_or_default(),
-            user.name.clone().unwrap_or_default(),
-            user.email.clone().unwrap_or_default(),
-        ];
-        let height = item
-            .iter()
-            .map(|content| content.chars().filter(|c| *c == '\n').count())
-            .max()
-            .unwrap_or(0)
-            + 1;
-        let cells = item.iter().map(|c| Cell::from(c.clone()));
-        Row::new(cells)
-            .height(height as u16)
-            .style(model.appearance.default_style)
-    });
+    // Create a List widget
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(format!(" {} ", t!("ui_select_default_user")))
+                .title_alignment(Alignment::Center)
+                .title_bottom(shortcuts.as_line())
+                .style(model.appearance.default_style),
+        )
+        .highlight_style(
+            Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC | Modifier::BOLD),
+        )
+        .highlight_symbol("> "); // Add a highlight symbol
 
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(38), // ID width
-            Constraint::Length(30), // Name width
-            Constraint::Fill(1),    // Email width (fills remaining)
-        ],
-    )
-    .header(header)
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .title(format!(" {} ", t!("ui_select_default_user")))
-            .title_alignment(Alignment::Center)
-            .title_bottom(shortcuts.as_line())
-            .style(model.appearance.default_style),
-    )
-    .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED | Modifier::ITALIC));
-
-    // Use a mutable borrow of the state
-    let mut table_state = model.user_selection_state.clone();
-
-    frame.render_stateful_widget(table, area, &mut table_state);
-
-    // Update the model's state after rendering
-    // model.user_selection_state = table_state; // No need to write back, we just read it here
+    // Render the List widget statefully using model.user_selection_state (which is ListState)
+    frame.render_stateful_widget(list, area, &mut model.user_selection_state);
 }

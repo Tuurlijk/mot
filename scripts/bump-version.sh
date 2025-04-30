@@ -327,15 +327,29 @@ fi
 # Ask to execute the remaining steps
 if ! $DRY_RUN; then
     step "Planned Actions 📋"
+    
+    # Get tag message with default
+    DEFAULT_TAG_MSG="Release v$NEW_VERSION"
+    echo -e "${CYAN}Tag message:${RESET}"
+    # Use read -i to pre-fill the input with the default message
+    read -e -i "$DEFAULT_TAG_MSG" -p "Enter tag message: " TAG_MSG
+    
+    # Use default if nothing entered (should not happen with -i, but just in case)
+    if [ -z "$TAG_MSG" ]; then
+        TAG_MSG="$DEFAULT_TAG_MSG"
+    fi
+    
     echo -e "${CYAN}1️⃣  Commit changes:${RESET} git commit -am \"Bump version to $NEW_VERSION\""
-    echo -e "${CYAN}2️⃣  Create tag:${RESET} git tag -a v$NEW_VERSION -m \"Release v$NEW_VERSION\""
+    echo -e "${CYAN}2️⃣  Create tag:${RESET} git tag -a v$NEW_VERSION -m \"$TAG_MSG\""
     echo -e "${CYAN}3️⃣  Push changes:${RESET} git push && git push --tags"
     echo
     
-    printf "${YELLOW}Would you like to execute these steps automatically?${RESET} [y/N] "
+    printf "${YELLOW}Would you like to execute these steps automatically?${RESET} [Y/n] "
     read -r AUTO_EXECUTE
 
-    if [[ "$AUTO_EXECUTE" =~ ^[Yy]$ ]]; then
+    if [[ "$AUTO_EXECUTE" =~ ^[Nn]$ ]]; then
+        info "No actions taken. You can run these steps manually."
+    else
         step "Executing Steps 🚀"
         
         # Check if there are changes to commit
@@ -361,7 +375,7 @@ if ! $DRY_RUN; then
         if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
             warning "Tag v$NEW_VERSION already exists! Skipping tag creation."
         else 
-            execute "git tag -a \"v$NEW_VERSION\" -m \"Release v$NEW_VERSION\"" \
+            execute "git tag -a \"v$NEW_VERSION\" -m \"$TAG_MSG\"" \
                     "Creating tag v$NEW_VERSION..." \
                     "Failed to create tag. Perhaps it already exists?"
         fi
@@ -369,10 +383,12 @@ if ! $DRY_RUN; then
         # Only proceed with push if we have something to push (commit or tag)
         if [ $? -eq 0 ]; then
             # Confirm before pushing (this is a potentially risky operation)
-            printf "${YELLOW}Ready to push changes and tags to remote. Continue?${RESET} [y/N] "
+            printf "${YELLOW}Ready to push changes and tags to remote. Continue?${RESET} [Y/n] "
             read -r CONFIRM_PUSH
             
-            if [[ "$CONFIRM_PUSH" =~ ^[Yy]$ ]]; then
+            if [[ "$CONFIRM_PUSH" =~ ^[Nn]$ ]]; then
+                info "Skipping push operation. Changes are committed locally."
+            else
                 execute "git push && git push --tags" \
                         "Pushing changes and tags..." \
                         "Failed to push. Do you have upstream permissions?"
@@ -380,12 +396,8 @@ if ! $DRY_RUN; then
                 if [ $? -eq 0 ]; then
                     success "All steps completed successfully! 🎉"
                 fi
-            else
-                info "Skipping push operation. Changes are committed locally."
             fi
         fi
-    else
-        info "No actions taken. You can run these steps manually."
     fi
 else
     step "Next Steps (Dry Run) 👣"

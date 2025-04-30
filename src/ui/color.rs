@@ -16,10 +16,12 @@ pub fn setup_colors(appearance: &mut Appearance) {
         &mut appearance.default_foreground_color_dimmed_indexed,
     );
 
-    // Set default style using the detected colors
-    appearance.default_style = Style::default().fg(Color::Indexed(rgb_to_indexed(
-        appearance.default_foreground_color,
-    )));
+    appearance.default_style = Style::default().fg(appearance.default_foreground_color_indexed);
+
+    appearance.default_block = appearance
+        .default_block
+        .clone()
+        .border_style(Style::default().fg(appearance.default_foreground_color_dimmed_indexed));
 }
 
 // Helper to calculate a gradient color based on distance from selected row

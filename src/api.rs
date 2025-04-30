@@ -1,6 +1,8 @@
 use crate::config::Configuration;
 use crate::moneybird::types::{Contact, Project, TimeEntry, User};
 use crate::moneybird::{self, types::Administration};
+use crate::plugin::PluginInfo;
+use crate::ui;
 use crate::{datetime, AppModel, TimeEntryForTable};
 use color_eyre::eyre::Result;
 use reqwest::Response;
@@ -395,30 +397,113 @@ pub(crate) async fn get_time_entries(model: &mut AppModel) {
             // Now populate the time_entries_for_table
             model.time_entries_for_table = entries
                 .iter()
-                .map(|entry| TimeEntryForTable {
-                    id: entry.id.clone().unwrap_or_default(),
-                    customer: entry
-                        .contact
-                        .clone()
-                        .unwrap_or_default()
-                        .company_name
-                        .clone()
-                        .unwrap_or_default(),
-                    project: entry
-                        .project
-                        .clone()
-                        .unwrap_or_default()
-                        .name
-                        .clone()
-                        .unwrap_or_default(),
-                    description: entry.description.clone().unwrap_or_default(),
-                    started_at: entry.started_at.clone().unwrap_or_default(),
-                    ended_at: entry.ended_at.clone().unwrap_or_default(),
-                    billable: entry.billable.unwrap_or_default(),
+                .map(|entry| {
+                    if !model
+                        .contacts
+                        .iter()
+                        .any(|c| c.id == entry.contact.clone().unwrap_or_default().id)
+                    {
+                        model
+                            .contacts
+                            .push(entry.contact.clone().unwrap_or_default());
+                    }
+
+                    TimeEntryForTable {
+                        id: entry.id.clone().unwrap_or_default(),
+                        customer: entry
+                            .contact
+                            .clone()
+                            .unwrap_or_default()
+                            .company_name
+                            .clone()
+                            .unwrap_or_default(),
+                        project: entry
+                            .project
+                            .clone()
+                            .unwrap_or_default()
+                            .name
+                            .clone()
+                            .unwrap_or_default(),
+                        description: entry.description.clone().unwrap_or_default(),
+                        started_at: entry.started_at.clone().unwrap_or_default(),
+                        ended_at: entry.ended_at.clone().unwrap_or_default(),
+                        billable: entry.billable.unwrap_or_default(),
+                        source: "moneybird".to_string(),
+                        icon: None,
+                        plugin_name: None,
+                    }
                 })
                 .collect();
 
             model.time_entries_for_table_backup = model.time_entries_for_table.clone();
+
+            // Load plugin entries if plugin system is available
+            if let Some(plugin_manager) = &mut model.plugin_manager {
+                // Calculate the week range dates in UTC
+                let (start, end) = datetime::calculate_week_range(
+                    model.week_offset,
+                    &admin_timezone_str,
+                    &model.config.week_starts_on,
+                );
+
+                // Convert to UTC for plugin API
+                let start_utc = start.with_timezone(&chrono::Utc);
+                let end_utc = end.with_timezone(&chrono::Utc);
+
+                // Get time entries from all plugins
+                match plugin_manager
+                    .get_all_time_entries(&start_utc, &end_utc)
+                    .await
+                {
+                    Ok((plugin_entries, errors)) => {
+                        // First, store the plugin errors for later
+                        let plugin_errors = errors;
+
+                        // Process plugin entries if we have any
+                        if !plugin_entries.is_empty() {
+                            // Convert plugin entries to TimeEntryForTable
+                            let mut table_entries: Vec<TimeEntryForTable> = plugin_entries
+                                .into_iter()
+                                .map(TimeEntryForTable::from)
+                                .collect();
+
+                            // Get the plugin info list once
+                            let plugin_infos = plugin_manager.list_plugins();
+
+                            // Apply icons to the entries
+                            apply_plugin_icons(model, &mut table_entries, &plugin_infos);
+
+                            // Log after updating the entries
+                            model.log_notice(t!(
+                                "plugin_entries_loaded",
+                                count = table_entries.len()
+                            ));
+
+                            // Store plugin entries
+                            model.plugin_entries = table_entries.clone();
+
+                            // Add plugin entries to regular entries
+                            model.time_entries_for_table.extend(table_entries);
+                            model.time_entries_for_table_backup =
+                                model.time_entries_for_table.clone();
+                        }
+
+                        // Now process any errors
+                        for (plugin_name, error_msg) in plugin_errors {
+                            model.log_error(error_msg.clone());
+                            crate::ui::show_error(
+                                model,
+                                t!("plugin_error", name = plugin_name, error = error_msg),
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to get plugin time entries: {}", e);
+                        model.log_error(error_msg.clone());
+                        crate::ui::show_error(model, error_msg);
+                    }
+                }
+            }
 
             if model.search_state.active {
                 model.filter_items();
@@ -722,6 +807,73 @@ pub(crate) async fn get_all_users(
             );
             handle_moneybird_error(err, &context, endpoint, "GET", administration_id).await?;
             unreachable!();
+        }
+    }
+}
+
+/// Apply plugin icons to time entries based on their plugin_name
+fn apply_plugin_icons(
+    model: &mut AppModel,
+    entries: &mut [TimeEntryForTable],
+    plugin_infos: &[PluginInfo],
+) {
+    for entry in entries {
+        // Only process entries that have a plugin_name
+        if let Some(entry_plugin_name) = &entry.plugin_name {
+            model.log_debug(format!(
+                "Entry plugin_name: '{}', looking for matching plugin",
+                entry_plugin_name
+            ));
+
+            // Try to find a matching plugin by exact name
+            let mut matched = false;
+            for plugin_info in plugin_infos {
+                // Log each plugin we're checking against
+                model.log_debug(format!(
+                    "Checking plugin: '{}' with icon: {:?}",
+                    plugin_info.name, plugin_info.icon
+                ));
+
+                // Match by exact plugin name
+                if entry_plugin_name == &plugin_info.name {
+                    // Apply icon from the manifest
+                    entry.icon = plugin_info.icon.clone();
+                    model.log_debug(format!(
+                        "Matched! Plugin: '{}', icon: {:?}",
+                        plugin_info.name, entry.icon
+                    ));
+                    matched = true;
+                    break;
+                }
+            }
+
+            if !matched {
+                model.log_debug(format!(
+                    "No matching plugin found for plugin_name: '{}'",
+                    entry_plugin_name
+                ));
+
+                // If we have no icon but do have a plugin_name, generate one from the plugin_name
+                if entry.icon.is_none() {
+                    entry.icon = Some(ui::get_default_icon(entry_plugin_name));
+                    model.log_debug(format!(
+                        "Generated default icon for plugin_name: '{}'",
+                        entry_plugin_name
+                    ));
+                }
+            }
+        } else {
+            model.log_debug("Entry has no plugin_name set, cannot match to a plugin".to_string());
+
+            // For backward compatibility, if there's no plugin_name but source isn't "moneybird",
+            // use the source field as plugin_name
+            if entry.source != "moneybird" && entry.source != "plugin" {
+                entry.plugin_name = Some(entry.source.clone());
+                model.log_debug(format!(
+                    "Using source '{}' as plugin_name for backward compatibility",
+                    entry.source
+                ));
+            }
         }
     }
 }

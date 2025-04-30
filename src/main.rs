@@ -11,6 +11,7 @@ mod file;
 mod model;
 mod moneybird;
 mod moneybird_traits;
+mod plugin;
 mod tui;
 mod ui;
 mod update;
@@ -58,8 +59,11 @@ async fn main() -> color_eyre::Result<()> {
     } else if let Some(detected_language) = config::detect_system_language() {
         // 3. System language auto-detection
         rust_i18n::set_locale(&detected_language);
-        model.log_notice(t!("notice_language_autodetected", language = detected_language));
-        
+        model.log_notice(t!(
+            "notice_language_autodetected",
+            language = detected_language
+        ));
+
         // Save the detected language to config
         model.config.language = Some(detected_language);
         if let Err(err) = config::save_configuration(&model.config) {
@@ -84,6 +88,80 @@ async fn main() -> color_eyre::Result<()> {
     // Initialize the application colors
     ui::color::setup_colors(&mut model.appearance);
     model.log_success(t!("success_colors_initialized"));
+
+    // Initialize plugin system
+    model.log_notice(t!("plugin_init_starting"));
+    match plugin::PluginManager::new() {
+        Ok(mut manager) => {
+            // Discover plugins
+            match manager.discover_plugins().await {
+                Ok(discover_results) => {
+                    if discover_results.is_empty() {
+                        model.log_notice(t!("plugin_init_none_found"));
+                    } else {
+                        for (_path, result) in discover_results {
+                            match result {
+                                Ok(msg) => model.log_success(msg), // Log success, don't show modal
+                                Err(err) => {
+                                    let err_msg = format!(
+                                        "{} {} {}",
+                                        t!("plugin_init_discover_error"),
+                                        t!("plugin_error_details"),
+                                        err
+                                    );
+                                    model.log_error(err_msg.clone());
+                                    ui::show_error(&mut model, err_msg);
+                                }
+                            }
+                        }
+                    }
+
+                    // Initialize the discovered plugins
+                    match manager.initialize_plugins().await {
+                        Ok(init_results) => {
+                            for (plugin_name, result) in init_results {
+                                match result {
+                                    Ok(_) => model
+                                        .log_success(t!("plugin_init_success", name = plugin_name)),
+                                    Err(err) => {
+                                        let err_msg = t!(
+                                            "plugin_init_error",
+                                            name = plugin_name,
+                                            error = err.to_string()
+                                        );
+                                        model.log_error(err_msg.clone());
+                                        ui::show_error(&mut model, err_msg);
+                                    }
+                                }
+                            }
+                            // Only assign manager if initialization was attempted (even if some failed)
+                            model.plugin_manager = Some(manager);
+                            model.log_notice(t!("plugin_init_finished"));
+                        }
+                        Err(e) => {
+                            let err_msg = t!("plugin_init_error_all", error = e.to_string());
+                            model.log_error(err_msg.clone());
+                            ui::show_error(&mut model, err_msg);
+                            // Assign manager even if initialization failed, maybe discovery worked?
+                            model.plugin_manager = Some(manager);
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = t!("plugin_init_discover_error_all", error = e.to_string());
+                    model.log_error(err_msg.clone());
+                    ui::show_error(&mut model, err_msg);
+                    // Manager instance likely invalid here, do not assign
+                }
+            }
+        }
+        Err(e) => {
+            // Error creating PluginManager itself
+            let err_msg = t!("plugin_init_manager_error", error = e.to_string());
+            model.log_error(err_msg.clone());
+            ui::show_error(&mut model, err_msg);
+        }
+    };
 
     // Try to get administration information if we have connectivity
     if !model.has_blocking_error() {
@@ -197,6 +275,35 @@ async fn main() -> color_eyre::Result<()> {
         api::get_time_entries(&mut model).await;
     }
 
+    // Handle plugin debug command if provided
+    if let Some(plugin_name) = args.plugin_debug {
+        if let Some(plugin_manager) = model.plugin_manager.as_mut() {
+            match plugin_manager
+                .debug_plugin_initialization(&plugin_name)
+                .await
+            {
+                Ok(debug_report) => {
+                    // Return early with the debug report
+                    println!("{}", debug_report);
+                    // Clean up and exit
+                    if let Err(e) = plugin_manager.shutdown().await {
+                        eprintln!("Error shutting down plugins: {}", e);
+                    }
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(eyre::eyre!(
+                        "Failed to debug plugin '{}': {}",
+                        plugin_name,
+                        e
+                    ));
+                }
+            }
+        } else {
+            return Err(eyre::eyre!("Plugin system not available"));
+        }
+    }
+
     if args.export {
         if model.has_blocking_error() {
             // Display model.modal_stack.top() title using eyre
@@ -229,6 +336,24 @@ async fn main() -> color_eyre::Result<()> {
     }
 
     // Clean up and exit
+    if let Some(plugin_manager) = model.plugin_manager.as_mut() {
+        match plugin_manager.shutdown().await {
+            Ok(errors) => {
+                // Handle any shutdown errors
+                for (plugin_name, error_msg) in errors {
+                    model.log_error(format!(
+                        "Error shutting down plugin {}: {}",
+                        plugin_name, error_msg
+                    ));
+                    // We can't show modals after terminal restore, so just log the errors
+                }
+            }
+            Err(e) => {
+                model.log_error(format!("Error shutting down plugins: {}", e));
+            }
+        }
+    }
+
     tui::restore_terminal()?;
     Ok(())
 }
@@ -255,6 +380,9 @@ fn view(model: &mut AppModel, frame: &mut Frame) {
     if model.user_selection_active {
         // If user selection is active, render the user selection list
         ui::render_user_selection(model, main_area, frame);
+    } else if model.plugin_view_state.active {
+        // If plugin view is active, render the plugins list
+        ui::render_plugins(model, main_area, frame);
     } else if model.edit_state.active {
         // When in edit mode, show the edit form
         ui::render_time_entry_edit(model, main_area, frame);

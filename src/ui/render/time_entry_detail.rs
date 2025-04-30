@@ -1,5 +1,5 @@
 use crate::ui::Shortcut;
-use crate::{datetime, ui::Shortcuts, AppModel};
+use crate::{datetime, ui, ui::Shortcuts, AppModel, TimeEntryForTable};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Modifier, Style};
@@ -8,6 +8,23 @@ use ratatui::widgets::{Block, Borders, Padding, Paragraph, Wrap};
 use ratatui::{symbols, Frame};
 use rust_i18n::t;
 
+/// Get the display icon for a time entry
+fn get_time_entry_icon(time_entry: &TimeEntryForTable) -> String {
+    if let Some(custom_icon) = &time_entry.icon {
+        // Use custom icon from plugin manifest if available
+        custom_icon.clone()
+    } else if time_entry.source.to_lowercase() == "moneybird" {
+        // Use blue circle for Moneybird
+        "🐦".to_string()
+    } else if let Some(plugin_name) = &time_entry.plugin_name {
+        // Use the plugin name for consistent icons
+        ui::get_default_icon(plugin_name)
+    } else {
+        // Use a default icon for unmatched entries
+        "❓".to_string()
+    }
+}
+
 pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame) {
     let shortcuts = Shortcuts::new(vec![
         Shortcut::Trio("◀", t!("ui_shortcut_week").as_ref(), "▶"),
@@ -15,19 +32,14 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         Shortcut::Pair("f", t!("ui_shortcut_filter").as_ref()),
         Shortcut::Pair("c", t!("ui_shortcut_create").as_ref()),
         Shortcut::Pair("e", t!("ui_shortcut_edit").as_ref()),
+        Shortcut::Pair("i", t!("ui_shortcut_import").as_ref()),
         Shortcut::Pair("d", t!("ui_shortcut_delete").as_ref()),
+        Shortcut::Pair("p", t!("ui_shortcut_plugins").as_ref()),
         Shortcut::Pair("x", t!("ui_shortcut_export").as_ref()),
         Shortcut::Pair("q", t!("ui_shortcut_quit").as_ref()),
     ])
     .with_alignment(Alignment::Right)
-    .with_key_style(
-        model
-            .appearance
-            .default_style
-            .green()
-            .add_modifier(Modifier::BOLD),
-    )
-    .with_label_style(model.appearance.default_style);
+    .with_label_style(model.appearance.default_style.add_modifier(Modifier::BOLD));
 
     let collapsed_top_border_set = symbols::border::Set {
         top_left: symbols::line::NORMAL.vertical_right,
@@ -37,13 +49,13 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         ..symbols::border::PLAIN
     };
 
-    let detail_block = Block::default()
-        .borders(Borders::ALL)
+    let detail_block = model
+        .appearance
+        .default_block
+        .clone()
         .border_set(collapsed_top_border_set)
         .title_alignment(Alignment::Left)
-        .title_bottom(shortcuts.as_line())
-        .padding(Padding::new(1, 1, 0, 0))
-        .style(model.appearance.default_style);
+        .title_bottom(shortcuts.as_line());
 
     // Check if we have any items to display and a valid selection
     if model.time_entries_for_table.is_empty() || model.time_entry_table_state.selected().is_none()
@@ -80,6 +92,9 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
     }
 
     let selected_item = &model.time_entries_for_table[selected_idx];
+
+    // Get the icon to display
+    let icon_display = get_time_entry_icon(selected_item);
 
     let client_project = vec![
         selected_item.customer.clone().green(),
@@ -124,8 +139,18 @@ pub fn render_time_entry_detail(model: &AppModel, area: Rect, frame: &mut Frame)
         ),
     ));
 
-    let mut title_spans = vec![Span::from(" ")];
+    let mut title_spans = vec![Span::from(" "), Span::from(icon_display), Span::from(" ")];
     title_spans.extend(client_project.clone());
+
+    // Add plugin information if not from Moneybird
+    if selected_item.source.to_lowercase() != "moneybird" {
+        if let Some(plugin_name) = &selected_item.plugin_name {
+            title_spans.push(Span::from(" ("));
+            title_spans.push(Span::from(plugin_name).italic());
+            title_spans.push(Span::from(")"));
+        }
+    }
+
     title_spans.push(Span::from(" "));
 
     let mut detail_lines: Vec<Line> = vec![Line::from(times), Line::from("")];

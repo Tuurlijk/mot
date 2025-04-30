@@ -19,6 +19,10 @@ pub(crate) struct Args {
     /// Set the display language (e.g., en, nl)
     #[clap(short = 'l', long, help = t!("cmd_language_help").to_string())]
     pub(crate) language: Option<String>,
+
+    /// Debug a plugin initialization issues
+    #[clap(long = "plugin-debug", value_name = "PLUGIN_NAME", help = t!("cmd_plugin_debug_help").to_string())]
+    pub(crate) plugin_debug: Option<String>,
 }
 
 fn about_str() -> &'static str {
@@ -37,8 +41,8 @@ fn about_str() -> &'static str {
      {}
      {}
  ",
-        t!("cmd_app_title").to_string(),
-        t!("cmd_app_credits").to_string(),
+        t!("cmd_app_title"),
+        t!("cmd_app_credits"),
         dynamic_value
     );
 
