@@ -75,6 +75,7 @@ pub fn render_time_entries_table(model: &mut AppModel, area: Rect, frame: &mut F
     let total_minutes = model
         .time_entries_for_table
         .iter()
+        .filter(|time_entry| time_entry.source.to_lowercase() == "moneybird") // Filter for Moneybird entries
         .fold(0_u64, |acc, time_entry| {
             let (hours, minutes) =
                 datetime::calculate_duration(&time_entry.started_at, &time_entry.ended_at);
