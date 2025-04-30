@@ -697,8 +697,8 @@ jobs:
           
           # Save the body for later use
           EXISTING_BODY=$(echo "$RELEASE_DATA" | jq -r '.body // ""')
-          echo "Existing body (first 100 chars):"
-          echo "$EXISTING_BODY" | head -c 100
+          echo "Existing body (first 1000 chars):"
+          echo "$EXISTING_BODY" | head -c 1000
           echo
           
           # Store the body content in a file for inspection
