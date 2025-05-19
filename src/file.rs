@@ -9,7 +9,7 @@ pub async fn handle_export_command(
     week_arg: String,
     query_arg: String,
 ) -> color_eyre::Result<()> {
-    println!("{}", t!("file_exporting_time_entries", week = week_arg));
+    println!("{}", t!("file_exporting_for_week", week_arg = week_arg));
 
     // Get administration timezone, default to UTC if not set
     let admin_timezone_str = model
@@ -36,7 +36,7 @@ pub async fn handle_export_command(
     }
 
     // Fetch time entries for the specified week
-    println!("{}", t!("file_fetching_time_entries", week = target_week));
+    println!("{}", t!("file_fetching_for_week", target_week = target_week));
     crate::api::get_time_entries(model).await;
 
     // Generate the filename with week number and date range
@@ -69,18 +69,24 @@ pub async fn handle_export_command(
     // Handle result
     match result {
         Ok(()) => {
+            // Count only Moneybird entries for the success message
+            let moneybird_entries_count = model.time_entries_for_table
+                .iter()
+                .filter(|entry| entry.source.to_lowercase() == "moneybird")
+                .count();
+                
             println!(
                 "{}",
                 t!(
                     "file_export_success",
-                    count = model.time_entries_for_table.len(),
+                    count = moneybird_entries_count,
                     filename = filename
                 )
             );
             Ok(())
         }
         Err(err) => {
-            eprintln!("{}", t!("file_export_error", error = err));
+            eprintln!("{}", t!("file_error_exporting", error = err));
             Err(color_eyre::eyre::eyre!(t!(
                 "file_export_failed",
                 error = err
@@ -106,8 +112,13 @@ pub fn export_time_entries_to_csv(
         Err(e) => return Err(t!("file_write_header_error", error = e).to_string()),
     }
 
-    // Write CSV data for each time entry
-    for entry in &model.time_entries_for_table {
+    // Only export Moneybird time entries
+    let moneybird_entries = model.time_entries_for_table
+        .iter()
+        .filter(|entry| entry.source.to_lowercase() == "moneybird");
+
+    // Write CSV data for each moneybird time entry
+    for entry in moneybird_entries {
         // Get administration timezone, default to UTC if not set
         let admin_timezone_str = model
             .administration

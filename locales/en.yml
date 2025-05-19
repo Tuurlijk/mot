@@ -228,7 +228,7 @@ api_failed_get_users: "Failed to get users for administration %{administration_i
 file_exporting_for_week: "Exporting time entries for week: %{week_arg}"
 file_fetching_for_week: "Fetching time entries for week %{target_week}..."
 file_exporting_to_file: "Exporting to file: %{filename}"
-file_filtering_with_query: "Filtering with query: %{query_arg}"
+file_filtering_with_query: "Filtering with query: %{query}"
 file_export_success: "Successfully exported %{count} time entries to %{filename}"
 file_error_exporting: "Error exporting time entries: %{error}"
 file_export_failed: "Export failed: %{error}"

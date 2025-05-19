@@ -228,7 +228,7 @@ api_failed_get_users: "Ophalen gebruikers voor administratie %{administration_id
 file_exporting_for_week: "Tijdinvoeringen exporteren voor week: %{week_arg}"
 file_fetching_for_week: "Tijdinvoeringen ophalen voor week %{target_week}..."
 file_exporting_to_file: "Exporteren naar bestand: %{filename}"
-file_filtering_with_query: "Filteren met query: %{query_arg}"
+file_filtering_with_query: "Filteren met query: %{query}"
 file_export_success: "Succesvol %{count} tijdinvoeringen geëxporteerd naar %{filename}"
 file_error_exporting: "Fout bij exporteren tijdinvoeringen: %{error}"
 file_export_failed: "Export mislukt: %{error}"
